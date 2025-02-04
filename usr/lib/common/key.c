@@ -4343,7 +4343,7 @@ CK_RV ecdsa_priv_validate_attribute(STDLL_TokData_t *tokdata, TEMPLATE *tmpl,
 {
     switch (attr->type) {
     case CKA_ECDSA_PARAMS:
-        if (mode == MODE_CREATE || mode == MODE_DERIVE)
+        if (mode == MODE_CREATE || mode == MODE_DERIVE || mode == MODE_KEYGEN)
             return CKR_OK;
 
         TRACE_ERROR("%s\n", ock_err(ERR_ATTRIBUTE_READ_ONLY));

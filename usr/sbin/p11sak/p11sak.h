@@ -316,6 +316,7 @@ static const CK_BYTE curve25519[] = OCK_CURVE25519;
 static const CK_BYTE curve448[] = OCK_CURVE448;
 static const CK_BYTE ed25519[] = OCK_ED25519;
 static const CK_BYTE ed448[] = OCK_ED448;
+static const CK_BYTE bls[] = OCK_BLS;
 #endif
 
 enum p11sak_toke_type {

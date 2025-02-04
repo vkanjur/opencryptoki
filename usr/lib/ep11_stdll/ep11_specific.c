@@ -2348,8 +2348,14 @@ static CK_BBOOL attr_applicable_for_ep11(STDLL_TokData_t * tokdata,
             return CK_FALSE;
         break;
     case CKK_EC:
+        /*if (class == CKO_PRIVATE_KEY && attr->type == CKA_EC_PARAMS &&
+            (curve_type != BLS12_CURVE))
+            return CK_FALSE;
+        if (class == CKO_PUBLIC_KEY && attr->type == CKA_EC_PARAMS &&
+            (curve_type != BLS12_CURVE))
+            return CK_FALSE;*/
         if (class == CKO_PRIVATE_KEY && attr->type == CKA_EC_PARAMS &&
-            mech->mechanism != CKM_IBM_BTC_DERIVE)
+            (mech->mechanism != CKM_IBM_BTC_DERIVE))
             return CK_FALSE;
         if (attr->type == CKA_ENCRYPT || attr->type == CKA_DECRYPT ||
             attr->type == CKA_WRAP || attr->type == CKA_UNWRAP)
@@ -3874,13 +3880,13 @@ static CK_RV import_EC_key(STDLL_TokData_t *tokdata, SESSION *sess,
         }
 
         /* CKA_EC_POINT is an BER encoded OCTET STRING. Extract it. */
-        rc = ber_decode_OCTET_STRING((CK_BYTE *)ec_point_attr->pValue, &ecpoint,
+        /*rc = ber_decode_OCTET_STRING((CK_BYTE *)ec_point_attr->pValue, &ecpoint,
                                      &ecpoint_len, &field_len);
         if (rc != CKR_OK || ec_point_attr->ulValueLen != field_len) {
             TRACE_DEVEL("%s ber_decode_OCTET_STRING failed\n", __func__);
             rc = CKR_ATTRIBUTE_VALUE_INVALID;
             goto import_EC_key_end;
-        }
+        }*/
 
         /* Uncompress the public key (EC_POINT) */
         rc = get_ecsiglen(ec_key_obj, &privkey_len);
@@ -5454,6 +5460,7 @@ static CK_BBOOL ep11tok_ec_curve_supported2(STDLL_TokData_t *tokdata,
     CK_RV rc;
     CK_ATTRIBUTE *attr = NULL;
     int i, status;
+    CK_BYTE val[14];
     const CK_VERSION ver3 = { .major = 3, .minor = 0 };
 
     *curve = NULL;
@@ -5464,7 +5471,16 @@ static CK_BBOOL ep11tok_ec_curve_supported2(STDLL_TokData_t *tokdata,
         TRACE_ERROR("Could not find CKA_ECDSA_PARAMS for the key.\n");
         return CK_FALSE;
     }
-
+    memset(val, 0, sizeof(val));
+    memcpy(val, attr->pValue, attr->ulValueLen > sizeof(val) ?
+                           sizeof(val) : attr->ulValueLen);
+    TRACE_DEBUG("First 4 bytes: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+                val[0], val[1], val[2], val[3], val[4], val[5], val[6], val[7], val[8], val[9], val[10], val[11], val[12], val[13]);
+    /*memcpy(val, der_ec_supported[NUMEC-1].data, der_ec_supported[NUMEC-1].data_size > sizeof(val) ?
+                               sizeof(val) : der_ec_supported[NUMEC-1].data_size);
+    TRACE_DEBUG("First 4 bytes: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x\n",
+            val[0], val[1], val[2], val[3], val[4], val[5], val[6], val[7], val[8], val[9], val[10], val[11], val[12], val[13]);*/
+    TRACE_DEBUG("sizes: %ld %ld \n",attr->ulValueLen, der_ec_supported[24].data_size);
     for (i = 0; i < NUMEC; i++) {
         if (der_ec_supported[i].data_size == attr->ulValueLen &&
             (memcmp(attr->pValue, der_ec_supported[i].data,
@@ -5483,6 +5499,7 @@ static CK_BBOOL ep11tok_ec_curve_supported2(STDLL_TokData_t *tokdata,
     case PRIME_CURVE:
     case BRAINPOOL_CURVE:
     case KOBLITZ_CURVE:
+    case BLS12_CURVE:
         break;
 
     case MONTGOMERY_CURVE:
@@ -9456,6 +9473,9 @@ static CK_RV ep11tok_ecdsa_other_mech_adjust(CK_MECHANISM *mech,
         break;
     case CKM_IBM_ECSDSA_COMPR_MULTI:
         mech_ep11->param = ECSG_IBM_ECSDSA_COMPR_MULTI;
+        break;
+    case CKM_IBM_BLS:
+        mech_ep11->param = ECSG_IBM_BLS;
         break;
     default:
        TRACE_ERROR("%s Invalid sub mechanism for CKM_IBM_ECDSA_OTHER: %lu\n",

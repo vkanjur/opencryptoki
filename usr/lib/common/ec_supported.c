@@ -68,6 +68,7 @@ const CK_BYTE curve25519[] = OCK_CURVE25519;
 const CK_BYTE curve448[] = OCK_CURVE448;
 const CK_BYTE ed25519[] = OCK_ED25519;
 const CK_BYTE ed448[] = OCK_ED448;
+const CK_BYTE bls[] = OCK_BLS;
 
 const struct _ec der_ec_supported[NUMEC] = {
     {BRAINPOOL_CURVE, CURVE160, CURVE160, NID_brainpoolP160r1, CK_FALSE,
@@ -118,4 +119,6 @@ const struct _ec der_ec_supported[NUMEC] = {
             sizeof(ed25519), &ed25519},
     {EDWARDS_CURVE, CURVE456, CURVE448, NID_ED448, CK_FALSE,
             sizeof(ed448), &ed448},
+    {BLS12_CURVE, CURVE768, CURVE384, CK_FALSE, CK_TRUE,
+            sizeof(bls), &bls},
 };

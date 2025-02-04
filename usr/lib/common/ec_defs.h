@@ -17,11 +17,12 @@
 
 // Elliptic Curve type (sync with CCA curve type in key value structure)
 //
-#define PRIME_CURVE         0x00
-#define BRAINPOOL_CURVE     0x01
-#define EDWARDS_CURVE       0x02
-#define KOBLITZ_CURVE       0x03
-#define MONTGOMERY_CURVE    0x04 /* Not used by CCA */
+#define PRIME_CURVE               0x00
+#define BRAINPOOL_CURVE           0x01
+#define EDWARDS_CURVE             0x02
+#define KOBLITZ_CURVE             0x03
+#define MONTGOMERY_CURVE          0x04 /* Not used by CCA */
+#define BLS12_CURVE               0x05 /* Not used by CCA */
 
 // Elliptic Curve length in bits
 //
@@ -35,9 +36,10 @@
 #define CURVE456        0x01C8
 #define CURVE512        0x0200
 #define CURVE521        0x0209
+#define CURVE768        0x0312
 
 /* Supported Elliptic Curves */
-#define NUMEC           24      /* number of supported curves */
+#define NUMEC           25      /* number of supported curves */
 extern const CK_BYTE brainpoolP160r1[];
 extern const CK_BYTE brainpoolP160t1[];
 extern const CK_BYTE brainpoolP192r1[];
@@ -62,6 +64,7 @@ extern const CK_BYTE curve25519[];
 extern const CK_BYTE curve448[];
 extern const CK_BYTE ed25519[];
 extern const CK_BYTE ed448[];
+extern const CK_BYTE bls[];
 
 
 // structure of supported Elliptic Curves
