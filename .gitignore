@@ -28,6 +28,7 @@ testcases/login/init_tok
 testcases/login/login
 testcases/login/login_flags_test
 testcases/login/set_pin
+testcases/misc_tests/always_auth
 testcases/misc_tests/cca_export_import_test
 testcases/misc_tests/events
 testcases/misc_tests/fork
@@ -66,6 +67,7 @@ testcases/unit/buffertest
 testcases/unit/uritest
 testcases/unit/pintest
 usr/sbin/p11sak/p11sak
+usr/sbin/p11kmip/p11kmip
 usr/sbin/pkcscca/pkcscca
 usr/sbin/pkcsconf/pkcsconf
 usr/sbin/pkcsicsf/pkcsicsf
@@ -90,6 +92,7 @@ libtool
 # ignore generated source (from <file>.in)
 usr/lib/api/shrd_mem.c
 man/man1/p11sak.1
+man/man1/p11kmip.1
 man/man1/pkcsep11_session.1
 man/man1/pkcsicsf.1
 man/man1/pkcstok_migrate.1
@@ -100,6 +103,7 @@ man/man1/pkcsconf.1
 man/man1/pkcsstats.1
 man/man1/pkcshsm_mk_change.1
 man/man5/policy.conf.5
+man/man5/p11kmip.conf.5
 man/man5/p11sak_defined_attrs.conf.5
 man/man5/opencryptoki.conf.5
 man/man5/strength.conf.5

@@ -119,6 +119,7 @@ CK_RV key_object_set_default_attributes(TEMPLATE *tmpl, CK_ULONG mode)
     CK_ATTRIBUTE *keygenmech_attr = NULL;
     CK_ATTRIBUTE *allowedmechs_attr = NULL;
     CK_ATTRIBUTE *pkey_attr = NULL;
+    CK_ATTRIBUTE *pkey_nextr_attr = NULL;
     CK_RV rc;
 
     UNUSED(mode);
@@ -135,9 +136,12 @@ CK_RV key_object_set_default_attributes(TEMPLATE *tmpl, CK_ULONG mode)
     allowedmechs_attr = (CK_ATTRIBUTE *) malloc(sizeof(CK_ATTRIBUTE));
     pkey_attr =
         (CK_ATTRIBUTE *) malloc(sizeof(CK_ATTRIBUTE) + sizeof(CK_BBOOL));
+    pkey_nextr_attr =
+            (CK_ATTRIBUTE *) malloc(sizeof(CK_ATTRIBUTE) + sizeof(CK_BBOOL));
 
     if (!id_attr || !sdate_attr || !edate_attr || !derive_attr || !local_attr
-        || !keygenmech_attr || !allowedmechs_attr || !pkey_attr) {
+        || !keygenmech_attr || !allowedmechs_attr || !pkey_attr
+        || !pkey_nextr_attr) {
         TRACE_ERROR("%s\n", ock_err(ERR_HOST_MEMORY));
         rc = CKR_HOST_MEMORY;
         goto error;
@@ -178,6 +182,11 @@ CK_RV key_object_set_default_attributes(TEMPLATE *tmpl, CK_ULONG mode)
     pkey_attr->ulValueLen = sizeof(CK_BBOOL);
     pkey_attr->pValue = (CK_BBOOL *) pkey_attr + sizeof(CK_ATTRIBUTE);
     *(CK_BBOOL *) pkey_attr->pValue = FALSE;
+
+    pkey_nextr_attr->type = CKA_IBM_PROTKEY_NEVER_EXTRACTABLE;
+    pkey_nextr_attr->ulValueLen = sizeof(CK_BBOOL);
+    pkey_nextr_attr->pValue = (CK_BBOOL *)pkey_nextr_attr + sizeof(CK_ATTRIBUTE);
+    *(CK_BBOOL *)pkey_nextr_attr->pValue = TRUE;
 
     rc = template_update_attribute(tmpl, id_attr);
     if (rc != CKR_OK) {
@@ -227,6 +236,12 @@ CK_RV key_object_set_default_attributes(TEMPLATE *tmpl, CK_ULONG mode)
         goto error;
     }
     pkey_attr = NULL;
+    rc = template_update_attribute(tmpl, pkey_nextr_attr);
+    if (rc != CKR_OK) {
+        TRACE_DEVEL("template_update_attribute failed.\n");
+        goto error;
+    }
+    pkey_nextr_attr = NULL;
 
     return CKR_OK;
 
@@ -247,6 +262,8 @@ error:
         free(allowedmechs_attr);
     if (pkey_attr)
         free(pkey_attr);
+    if (pkey_nextr_attr)
+        free(pkey_nextr_attr);
 
     return rc;
 }
@@ -257,6 +274,9 @@ error:
 CK_RV key_object_validate_attribute(TEMPLATE *tmpl, CK_ATTRIBUTE *attr,
                                     CK_ULONG mode)
 {
+    CK_RV rc;
+    CK_BBOOL ck_false = TRUE;
+
     switch (attr->type) {
     case CKA_KEY_TYPE:
         if (attr->ulValueLen != sizeof(CK_KEY_TYPE) || attr->pValue == NULL) {
@@ -311,8 +331,20 @@ CK_RV key_object_validate_attribute(TEMPLATE *tmpl, CK_ATTRIBUTE *attr,
             TRACE_ERROR("%s\n", ock_err(ERR_ATTRIBUTE_READ_ONLY));
             return CKR_ATTRIBUTE_READ_ONLY;
         }
+        if (value == TRUE) {
+            rc = template_build_update_attribute(tmpl,
+                                             CKA_IBM_PROTKEY_NEVER_EXTRACTABLE,
+                                             (CK_BYTE *)&ck_false,
+                                             sizeof(ck_false));
+            if (rc != CKR_OK) {
+                TRACE_DEVEL("template_build_update_attribute failed.\n");
+                return rc;
+            }
+        }
         return CKR_OK;
-        break;
+    case CKA_IBM_PROTKEY_NEVER_EXTRACTABLE:
+        TRACE_ERROR("%s\n", ock_err(ERR_ATTRIBUTE_READ_ONLY));
+        return CKR_ATTRIBUTE_READ_ONLY;
     case CKA_IBM_ATTRBOUND:
         if (attr->ulValueLen != sizeof(CK_BBOOL) || attr->pValue == NULL) {
             TRACE_ERROR("%s\n", ock_err(ERR_ATTRIBUTE_VALUE_INVALID));
@@ -1289,7 +1321,7 @@ CK_RV priv_key_validate_attribute(STDLL_TokData_t *tokdata, TEMPLATE *tmpl,
                 TRACE_ERROR("%s\n", ock_err(ERR_ATTRIBUTE_READ_ONLY));
                 return CKR_ATTRIBUTE_READ_ONLY;
             }
-            if (value == FALSE) {
+            if (value == TRUE) {
                 CK_ATTRIBUTE *attr;
 
                 attr =
@@ -2608,10 +2640,12 @@ error:
 
 
 CK_RV rsa_priv_unwrap_get_data(TEMPLATE *tmpl,
-                              CK_BYTE *data, CK_ULONG total_length)
+                               CK_BYTE *data, CK_ULONG total_length,
+                               CK_BBOOL is_public)
 {
     CK_ATTRIBUTE *modulus = NULL;
     CK_ATTRIBUTE *publ_exp = NULL;
+    CK_ULONG mod_bits;
     CK_RV rc;
 
     rc = ber_decode_RSAPublicKey(data, total_length, &modulus, &publ_exp);
@@ -2623,6 +2657,17 @@ CK_RV rsa_priv_unwrap_get_data(TEMPLATE *tmpl,
 
     p11_attribute_trim(modulus);
     p11_attribute_trim(publ_exp);
+    mod_bits = modulus->ulValueLen * 8;
+
+    if (is_public) {
+        rc = template_build_update_attribute(tmpl, CKA_MODULUS_BITS,
+                                             (CK_BYTE *)&mod_bits,
+                                             sizeof(mod_bits));
+        if (rc != CKR_OK) {
+            TRACE_DEVEL("template_build_update_attribute failed.\n");
+            goto error;
+        }
+    }
 
     rc = template_update_attribute(tmpl, modulus);
     if (rc != CKR_OK) {
@@ -2994,7 +3039,7 @@ CK_RV ibm_dilithium_priv_wrap_get_data(TEMPLATE *tmpl,
 
 CK_RV ibm_dilithium_priv_unwrap_get_data(TEMPLATE *tmpl, CK_BYTE *data,
                                          CK_ULONG total_length,
-                                         CK_BBOOL add_value)
+                                         CK_BBOOL is_public)
 {
     CK_ATTRIBUTE *rho = NULL;
     CK_ATTRIBUTE *t1 = NULL;
@@ -3027,7 +3072,7 @@ CK_RV ibm_dilithium_priv_unwrap_get_data(TEMPLATE *tmpl, CK_BYTE *data,
         goto error;
     }
     t1 = NULL;
-    if (add_value) {
+    if (is_public) {
         rc = template_update_attribute(tmpl, value);
         if (rc != CKR_OK) {
             TRACE_DEVEL("template_update_attribute failed.\n");
@@ -3219,7 +3264,7 @@ CK_RV ibm_kyber_priv_wrap_get_data(TEMPLATE *tmpl,
 
 CK_RV ibm_kyber_priv_unwrap_get_data(TEMPLATE *tmpl, CK_BYTE *data,
                                      CK_ULONG total_length,
-                                     CK_BBOOL add_value)
+                                     CK_BBOOL is_public)
 {
     CK_ATTRIBUTE *pk = NULL;
     CK_ATTRIBUTE *value = NULL;
@@ -3245,7 +3290,7 @@ CK_RV ibm_kyber_priv_unwrap_get_data(TEMPLATE *tmpl, CK_BYTE *data,
         goto error;
     }
     pk = NULL;
-    if (add_value) {
+    if (is_public) {
         rc = template_update_attribute(tmpl, value);
         if (rc != CKR_OK) {
             TRACE_DEVEL("template_update_attribute failed.\n");
@@ -3372,15 +3417,15 @@ CK_RV ibm_pqc_priv_unwrap(TEMPLATE *tmpl, CK_KEY_TYPE keytype, CK_BYTE *data,
 
 CK_RV ibm_pqc_priv_unwrap_get_data(TEMPLATE *tmpl, CK_KEY_TYPE keytype,
                                    CK_BYTE *data, CK_ULONG total_length,
-                                   CK_BBOOL add_value)
+                                   CK_BBOOL is_public)
 {
     switch (keytype) {
     case CKK_IBM_PQC_DILITHIUM:
         return ibm_dilithium_priv_unwrap_get_data(tmpl, data, total_length,
-                                                  add_value);
+                                                  is_public);
     case CKK_IBM_PQC_KYBER:
         return ibm_kyber_priv_unwrap_get_data(tmpl, data, total_length,
-                                                   add_value);
+                                              is_public);
     default:
         TRACE_DEVEL("Key type 0x%lx not supported.\n", keytype);
         return CKR_KEY_TYPE_INCONSISTENT;
@@ -3960,7 +4005,8 @@ error:
 }
 
 CK_RV dsa_priv_unwrap_get_data(TEMPLATE *tmpl,
-                              CK_BYTE *data, CK_ULONG total_length)
+                               CK_BYTE *data, CK_ULONG total_length,
+                               CK_BBOOL is_public)
 {
     CK_ATTRIBUTE *prime = NULL;
     CK_ATTRIBUTE *subprime = NULL;
@@ -3999,10 +4045,15 @@ CK_RV dsa_priv_unwrap_get_data(TEMPLATE *tmpl,
         goto error;
     }
     base = NULL;
-    rc = template_update_attribute(tmpl, value);
-    if (rc != CKR_OK) {
-        TRACE_ERROR("template_update_attribute failed\n");
-        goto error;
+
+    if (is_public) {
+        rc = template_update_attribute(tmpl, value);
+        if (rc != CKR_OK) {
+            TRACE_ERROR("template_update_attribute failed\n");
+            goto error;
+        }
+    } else {
+        free(value);
     }
     value = NULL;
 
@@ -4436,7 +4487,8 @@ CK_RV ecdsa_priv_wrap_get_data(TEMPLATE *tmpl,
 }
 
 CK_RV ecdsa_priv_unwrap_get_data(TEMPLATE *tmpl,
-                                 CK_BYTE *data, CK_ULONG total_length)
+                                 CK_BYTE *data, CK_ULONG total_length,
+                                 CK_BBOOL is_public)
 {
     CK_ATTRIBUTE *params = NULL;
     CK_ATTRIBUTE *point = NULL;
@@ -4455,10 +4507,15 @@ CK_RV ecdsa_priv_unwrap_get_data(TEMPLATE *tmpl,
         goto error;
     }
     params = NULL;
-    rc = template_update_attribute(tmpl, point);
-    if (rc != CKR_OK) {
-        TRACE_ERROR("template_update_attribute failed\n");
-        goto error;
+
+    if (is_public) {
+        rc = template_update_attribute(tmpl, point);
+        if (rc != CKR_OK) {
+            TRACE_ERROR("template_update_attribute failed\n");
+            goto error;
+        }
+    } else {
+        free(point);
     }
     point = NULL;
 
@@ -4967,7 +5024,8 @@ error:
 }
 
 CK_RV dh_priv_unwrap_get_data(TEMPLATE *tmpl,
-                              CK_BYTE *data, CK_ULONG total_length)
+                              CK_BYTE *data, CK_ULONG total_length,
+                              CK_BBOOL is_public)
 {
     CK_ATTRIBUTE *prime = NULL;
     CK_ATTRIBUTE *base = NULL;
@@ -5000,25 +5058,32 @@ CK_RV dh_priv_unwrap_get_data(TEMPLATE *tmpl,
         goto error;
     }
     base = NULL;
-    rc = template_update_attribute(tmpl, value);
-    if (rc != CKR_OK) {
-        TRACE_ERROR("template_update_attribute failed\n");
-        goto error;
+
+    if (is_public) {
+        rc = template_update_attribute(tmpl, value);
+        if (rc != CKR_OK) {
+            TRACE_ERROR("template_update_attribute failed\n");
+            goto error;
+        }
+    } else {
+        free(value);
     }
     value = NULL;
 
-    rc = build_attribute(CKA_VALUE_BITS, (CK_BYTE *)&num_bits, sizeof(num_bits),
-                         &value_bits);
-    if (rc != CKR_OK) {
-        TRACE_DEVEL("build_attribute failed\n");
-        goto error;
+    if (!is_public) {
+        rc = build_attribute(CKA_VALUE_BITS, (CK_BYTE *)&num_bits,
+                             sizeof(num_bits), &value_bits);
+        if (rc != CKR_OK) {
+            TRACE_DEVEL("build_attribute failed\n");
+            goto error;
+        }
+        rc = template_update_attribute(tmpl, value_bits);
+        if (rc != CKR_OK) {
+            TRACE_ERROR("template_update_attribute failed\n");
+            goto error;
+        }
+        value_bits = NULL;
     }
-    rc = template_update_attribute(tmpl, value_bits);
-    if (rc != CKR_OK) {
-        TRACE_ERROR("template_update_attribute failed\n");
-        goto error;
-    }
-    value_bits = NULL;
 
     return CKR_OK;
 
