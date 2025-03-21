@@ -1,19 +1,39 @@
-/*
- * (C) Copyright IBM Corp. 2012, 2024
+/*----------------------------------------------------------------------
+ * This EP11 header file is distributed under the following license
  *
- * This program is provided under the terms of the Common Public License,
- * version 1.0 (CPL-1.0). Any use, reproduction or distribution for this
- * software constitutes recipient's acceptance of CPL-1.0 terms which can be
- * found in the file LICENSE file or at
- * https://opensource.org/licenses/cpl1.0.php
+ * Copyright 2023 IBM Corp. All Rights Reserved
+ *
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ *
+ * 1. Redistributions of source code must retain the above copyright notice,
+ *    this list of conditions and the following disclaimer.
+ *
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ *
+ * 3. Neither the name of the copyright holder nor the names of its contributors
+ *    may be used to endorse or promote products derived from this software
+ *    without specific prior written permission.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+ * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS;
+ * OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+ * WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR
+ * OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+ * ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  *----------------------------------------------------------------------
- *  EP11 service mail address: EP11SERV@de.ibm.com
+ *  EP11 support e-mail address: EP11SUPP@de.ibm.com
  *
- *  Use this mail address for Bugs and Comments with the EP11 product.
- *----------------------------------------------------------------------
- */
-
+ *  Use this e-mail address for Bugs and Comments with the EP11 product.
+ *----------------------------------------------------------------------*/
 #if !defined(XCP_H__)
 #define XCP_H__
 #if !defined(CKR_OK)
@@ -320,6 +340,7 @@ typedef enum {
 } ECSG_Var_t;
 
 
+#define  CKM_IBM_EC_AGGREGATE  (CKM_VENDOR_DEFINED +0x10034)
 
 typedef enum {
 	EC_AGG_BLS12_381_SIGN = 1, // size of signature is sufficient indicator
@@ -3338,9 +3359,9 @@ int m_shutdown(void);
 
 /*--  build identification  ------------------------------------------------*/
 
-#define  XCP_BUILD_ID    0xd5b72359
-#define  XCP_BUILD_DATE  0x20240119       /* UTC */
-#define  XCP_BUILD_TIME  0x125837         /* UTC */
+#define  XCP_BUILD_ID    0x156a2ca4
+#define  XCP_BUILD_DATE  0x20240209       /* UTC */
+#define  XCP_BUILD_TIME  0x060141         /* UTC */
 
 /*--------------------------------------------------------------------------*/
 #define __XCP_REASONCODES_H__ 1
@@ -3615,4 +3636,3 @@ typedef enum {
 
 
 #endif /* n defined(XCP_H__) */
-

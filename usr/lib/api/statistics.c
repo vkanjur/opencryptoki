@@ -199,6 +199,12 @@ static CK_RV statistics_increment(struct statistics *statistics,
             break;
         }
         break;
+    case CKM_IBM_EC_AGGREGATE:
+        if (/*mech->ulParameterLen != sizeof(CK_IBM_BTC_DERIVE_PARAMS) ||*/
+            mech->pParameter == NULL)
+            TRACE_ERROR("Invalid mechanism parameter\n");
+            return CKR_MECHANISM_PARAM_INVALID;
+        break;
     case CKM_IBM_BTC_DERIVE:
         if (mech->pParameter == NULL ||
             mech->ulParameterLen != sizeof(CK_IBM_BTC_DERIVE_PARAMS))

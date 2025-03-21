@@ -1296,6 +1296,7 @@ DECLARE_CURVE_INFO(curve25519, 256);
 DECLARE_CURVE_INFO(curve448, 448);
 DECLARE_CURVE_INFO(ed25519, 256);
 DECLARE_CURVE_INFO(ed448, 448);
+DECLARE_CURVE_INFO(bls, 384);
 
 static const struct p11sak_enum_value p11sak_ec_curves[] = {
     DECLARE_CURVE_VALUE(prime256v1),
@@ -1322,6 +1323,7 @@ static const struct p11sak_enum_value p11sak_ec_curves[] = {
     DECLARE_CURVE_VALUE(curve448),
     DECLARE_CURVE_VALUE(ed25519),
     DECLARE_CURVE_VALUE(ed448),
+	DECLARE_CURVE_VALUE(bls),
     { .value = NULL, },
 };
 

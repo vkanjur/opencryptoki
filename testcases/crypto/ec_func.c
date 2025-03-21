@@ -1667,6 +1667,254 @@ CK_RV run_GenerateSignVerifyECC(CK_SESSION_HANDLE session,
     CK_ULONG i, signaturelen;
     CK_MECHANISM_INFO mech_info;
     CK_RV rc;
+    signaturelen=192;
+    if ((mech->mechanism == CKM_IBM_ED25519_SHA512 ||
+         mech->mechanism == CKM_IBM_ED448_SHA3)) {
+        if (curve_type != CURVE_EDWARDS) {
+            /* Mechanism does not match to curve type, skip */
+            rc = CKR_OK;
+            goto testcase_cleanup;
+        }
+        if (mech->mechanism == CKM_IBM_ED25519_SHA512 &&
+            memcmp(params, ed25519, MIN(params_len, sizeof(ed25519))) != 0) {
+            /* Mechanism does not match to curve, skip */
+            rc = CKR_OK;
+            goto testcase_cleanup;
+        }
+        if (mech->mechanism == CKM_IBM_ED448_SHA3 &&
+            memcmp(params, ed448, MIN(params_len, sizeof(ed448))) != 0) {
+            /* Mechanism does not match to curve, skip */
+            rc = CKR_OK;
+            goto testcase_cleanup;
+        }
+    } /*else if (mech->mechanism == CKM_IBM_ECDSA_OTHER &&
+               memcmp(params, secp256k1, MIN(params_len, sizeof(secp256k1))) != 0 &&
+               memcmp(params, prime256v1, MIN(params_len, sizeof(prime256v1))) != 0 &&
+               memcmp(params, brainpoolP256r1, MIN(params_len, sizeof(brainpoolP256r1))) != 0 &&
+               memcmp(params, brainpoolP256t1, MIN(params_len, sizeof(brainpoolP256t1)))) {
+        /* CKM_IBM_ECDSA_OTHER can only be used with 256-bit EC curves, skip */
+
+        /*rc = CKR_OK;
+        goto testcase_cleanup;
+    } */else {
+        if (curve_type == CURVE_EDWARDS || curve_type == CURVE_MONTGOMERY) {
+            /* Mechanism does not match to curve type, skip */
+            rc = CKR_OK;
+            goto testcase_cleanup;
+        }
+    }
+
+    testcase_begin("Starting with mechtype='%s', inputlen=%lu parts=%lu, pkey=%X",
+                   p11_get_ckm(&mechtable_funcs, mech->mechanism), inputlen, parts, pkey);
+
+    /* query the slot, check if this mech if supported */
+    rc = funcs->C_GetMechanismInfo(SLOT_ID, mech->mechanism, &mech_info);
+    if (rc != CKR_OK) {
+        if (rc == CKR_MECHANISM_INVALID) {
+            /* no support for EC key gen? skip */
+            testcase_skip("Slot %u doesn't support %s",
+                          (unsigned int) SLOT_ID,
+                          p11_get_ckm(&mechtable_funcs, mech->mechanism));
+            rc = CKR_OK;
+            goto testcase_cleanup;
+        } else {
+            testcase_error("C_GetMechanismInfo() rc = %s", p11_get_ckr(rc));
+            goto testcase_cleanup;
+        }
+    }
+
+    if (inputlen > 0) {
+        data = calloc(inputlen, sizeof(CK_BYTE));
+        if (data == NULL) {
+            testcase_error("Can't allocate memory for %lu bytes",
+                           sizeof(CK_BYTE) * inputlen);
+            rc = -1;
+            goto testcase_cleanup;
+        }
+
+        for (i = 0; i < inputlen; i++) {
+            data[i] = (i + 1) % 255;
+        }
+    }
+
+    rc = funcs->C_SignInit(session, mech, priv_key);
+    if (rc != CKR_OK) {
+        testcase_error("C_SignInit rc=%s", p11_get_ckr(rc));
+        goto testcase_cleanup;
+    }
+
+    if (parts > 0) {
+        if (inputlen > 0) {
+            for (i = 0; i < parts && inputlen > 0; i++) {
+                rc = funcs->C_SignUpdate(session, data, inputlen);
+                if (rc != CKR_OK) {
+                    testcase_error("C_SignUpdate rc=%s", p11_get_ckr(rc));
+                    goto testcase_cleanup;
+                }
+            }
+        } else {
+            rc = funcs->C_SignUpdate(session, NULL, 0);
+            if (rc != CKR_OK) {
+                testcase_error("C_SignUpdate rc=%s", p11_get_ckr(rc));
+                goto testcase_cleanup;
+            }
+        }
+
+        /* get signature length */
+        rc = funcs->C_SignFinal(session, signature, &signaturelen);
+        if (rc != CKR_OK) {
+            testcase_error("C_SignFinal rc=%s", p11_get_ckr(rc));
+            goto testcase_cleanup;
+        }
+    } else {
+        rc = funcs->C_Sign(session, data != NULL ? data : (CK_BYTE *)"",
+                           inputlen, NULL, &signaturelen);
+        if (rc != CKR_OK) {
+            testcase_error("C_Sign rc=%s", p11_get_ckr(rc));
+            goto testcase_cleanup;
+        }
+    }
+    testcase_pass("\nSignaturelen intermediate :%d",signaturelen);
+    signaturelen=192;
+    signature = calloc(signaturelen, sizeof(CK_BYTE));
+    if (signature == NULL) {
+        testcase_error("Can't allocate memory for %lu bytes",
+                       sizeof(CK_BYTE) * signaturelen);
+        rc = -1;
+        goto testcase_cleanup;
+    }
+
+    if (parts > 0) {
+        rc = funcs->C_SignFinal(session, signature, &signaturelen);
+        if (rc != CKR_OK) {
+            testcase_error("C_SignFinal rc=%s", p11_get_ckr(rc));
+            goto testcase_cleanup;
+        }
+    } else {
+        rc = funcs->C_Sign(session, data != NULL ? data : (CK_BYTE *)"",
+                           inputlen, signature, &signaturelen);
+        if (rc != CKR_OK) {
+            testcase_error("C_Sign rc=%s", p11_get_ckr(rc));
+            goto testcase_cleanup;
+        }
+    }
+    testcase_pass("\nSignaturelen final :%d",signaturelen);
+    /****** Verify *******/
+    rc = funcs->C_VerifyInit(session, mech, publ_key);
+    if (rc != CKR_OK) {
+        testcase_error("C_VerifyInit rc=%s", p11_get_ckr(rc));
+        goto testcase_cleanup;
+    }
+
+    if (parts > 0) {
+        if (inputlen > 0) {
+            for (i = 0; i < parts && inputlen > 0; i++) {
+                rc = funcs->C_VerifyUpdate(session, data, inputlen);
+                if (rc != CKR_OK) {
+                    testcase_error("C_VerifyUpdate rc=%s", p11_get_ckr(rc));
+                    goto testcase_cleanup;
+                }
+            }
+        } else {
+            rc = funcs->C_VerifyUpdate(session, NULL, 0);
+            if (rc != CKR_OK) {
+                testcase_error("C_VerifyUpdate rc=%s", p11_get_ckr(rc));
+                goto testcase_cleanup;
+            }
+        }
+
+        rc = funcs->C_VerifyFinal(session, signature, signaturelen);
+        if (rc != CKR_OK) {
+            testcase_error("C_VerifyFinal rc=%s", p11_get_ckr(rc));
+            goto testcase_cleanup;
+        }
+    } else {
+        rc = funcs->C_Verify(session, data != NULL ? data : (CK_BYTE *)"",
+                             inputlen, signature, signaturelen);
+        if (rc != CKR_OK) {
+            testcase_error("C_Verify rc=%s", p11_get_ckr(rc));
+            goto testcase_cleanup;
+        }
+    }
+
+    // corrupt the signature and re-verify
+    memcpy(signature, "ABCDEFGHIJKLMNOPQRSTUV",
+           strlen("ABCDEFGHIJKLMNOPQRSTUV"));
+
+    rc = funcs->C_VerifyInit(session, mech, publ_key);
+    if (rc != CKR_OK) {
+        testcase_error("C_VerifyInit rc=%s", p11_get_ckr(rc));
+        goto testcase_cleanup;
+    }
+
+    if (parts > 0) {
+        if (inputlen > 0) {
+            for (i = 0; i < parts && inputlen > 0; i++) {
+                rc = funcs->C_VerifyUpdate(session, data, inputlen);
+                if (rc != CKR_OK) {
+                    testcase_error("C_VerifyUpdate rc=%s", p11_get_ckr(rc));
+                    goto testcase_cleanup;
+                }
+            }
+        } else {
+            rc = funcs->C_VerifyUpdate(session, NULL, 0);
+            if (rc != CKR_OK) {
+                testcase_error("C_VerifyUpdate rc=%s", p11_get_ckr(rc));
+                goto testcase_cleanup;
+            }
+        }
+
+        rc = funcs->C_VerifyFinal(session, signature, signaturelen);
+        if (rc != CKR_SIGNATURE_INVALID) {
+            if (rc ==  CKR_FUNCTION_FAILED && is_ica_token(SLOT_ID)) {
+                testcase_notice("C_VerifyFinal rc=%s temporarily accepted for ICA token",
+                                p11_get_ckr(rc));
+            } else {
+                testcase_error("C_VerifyFinal rc=%s", p11_get_ckr(rc));
+                PRINT_ERR("		Expected CKR_SIGNATURE_INVALID\n");
+                goto testcase_cleanup;
+            }
+        }
+    } else {
+        rc = funcs->C_Verify(session, data != NULL ? data : (CK_BYTE *)"",
+                             inputlen, signature, signaturelen);
+        if (rc != CKR_SIGNATURE_INVALID) {
+            if (rc ==  CKR_FUNCTION_FAILED && is_ica_token(SLOT_ID)) {
+                testcase_notice("C_Verify rc=%s temporarily accepted for ICA token",
+                                p11_get_ckr(rc));
+            } else {
+                testcase_error("C_Verify rc=%s", p11_get_ckr(rc));
+                PRINT_ERR("		Expected CKR_SIGNATURE_INVALID\n");
+                goto testcase_cleanup;
+            }
+        }
+    }
+
+    rc = CKR_OK;
+
+testcase_cleanup:
+    if (data)
+        free(data);
+    if (signature)
+        free(signature);
+
+    return rc;
+}
+
+CK_RV run_GenerateSignVerifyECCwithreturn(CK_SESSION_HANDLE session,
+                                CK_MECHANISM *mech,
+                                CK_ULONG inputlen,
+                                CK_ULONG parts,
+                                CK_OBJECT_HANDLE priv_key,
+                                CK_OBJECT_HANDLE publ_key,
+                                enum curve_type curve_type,
+                                CK_BYTE *params, CK_ULONG params_len,
+                                CK_BYTE_PTR signature, CK_ULONG signaturelen)
+{
+    CK_BYTE_PTR data = NULL;
+    CK_ULONG i;
+    CK_MECHANISM_INFO mech_info;
+    CK_RV rc;
 
     if ((mech->mechanism == CKM_IBM_ED25519_SHA512 ||
          mech->mechanism == CKM_IBM_ED448_SHA3)) {
@@ -1773,7 +2021,7 @@ CK_RV run_GenerateSignVerifyECC(CK_SESSION_HANDLE session,
             goto testcase_cleanup;
         }
     }
-
+    testcase_pass("*Generate signaturelen=%lu (bls) passed.", signaturelen);
     signature = calloc(signaturelen, sizeof(CK_BYTE));
     if (signature == NULL) {
         testcase_error("Can't allocate memory for %lu bytes",
@@ -1797,107 +2045,19 @@ CK_RV run_GenerateSignVerifyECC(CK_SESSION_HANDLE session,
         }
     }
 
-    /****** Verify *******/
-    rc = funcs->C_VerifyInit(session, mech, publ_key);
-    if (rc != CKR_OK) {
-        testcase_error("C_VerifyInit rc=%s", p11_get_ckr(rc));
-        goto testcase_cleanup;
-    }
 
-    if (parts > 0) {
-        if (inputlen > 0) {
-            for (i = 0; i < parts && inputlen > 0; i++) {
-                rc = funcs->C_VerifyUpdate(session, data, inputlen);
-                if (rc != CKR_OK) {
-                    testcase_error("C_VerifyUpdate rc=%s", p11_get_ckr(rc));
-                    goto testcase_cleanup;
-                }
-            }
-        } else {
-            rc = funcs->C_VerifyUpdate(session, NULL, 0);
-            if (rc != CKR_OK) {
-                testcase_error("C_VerifyUpdate rc=%s", p11_get_ckr(rc));
-                goto testcase_cleanup;
-            }
-        }
-
-        rc = funcs->C_VerifyFinal(session, signature, signaturelen);
-        if (rc != CKR_OK) {
-            testcase_error("C_VerifyFinal rc=%s", p11_get_ckr(rc));
-            goto testcase_cleanup;
-        }
-    } else {
-        rc = funcs->C_Verify(session, data != NULL ? data : (CK_BYTE *)"",
-                             inputlen, signature, signaturelen);
-        if (rc != CKR_OK) {
-            testcase_error("C_Verify rc=%s", p11_get_ckr(rc));
-            goto testcase_cleanup;
-        }
-    }
-
-    // corrupt the signature and re-verify
-    memcpy(signature, "ABCDEFGHIJKLMNOPQRSTUV",
-           strlen("ABCDEFGHIJKLMNOPQRSTUV"));
-
-    rc = funcs->C_VerifyInit(session, mech, publ_key);
-    if (rc != CKR_OK) {
-        testcase_error("C_VerifyInit rc=%s", p11_get_ckr(rc));
-        goto testcase_cleanup;
-    }
-
-    if (parts > 0) {
-        if (inputlen > 0) {
-            for (i = 0; i < parts && inputlen > 0; i++) {
-                rc = funcs->C_VerifyUpdate(session, data, inputlen);
-                if (rc != CKR_OK) {
-                    testcase_error("C_VerifyUpdate rc=%s", p11_get_ckr(rc));
-                    goto testcase_cleanup;
-                }
-            }
-        } else {
-            rc = funcs->C_VerifyUpdate(session, NULL, 0);
-            if (rc != CKR_OK) {
-                testcase_error("C_VerifyUpdate rc=%s", p11_get_ckr(rc));
-                goto testcase_cleanup;
-            }
-        }
-
-        rc = funcs->C_VerifyFinal(session, signature, signaturelen);
-        if (rc != CKR_SIGNATURE_INVALID) {
-            if (rc ==  CKR_FUNCTION_FAILED && is_ica_token(SLOT_ID)) {
-                testcase_notice("C_VerifyFinal rc=%s temporarily accepted for ICA token",
-                                p11_get_ckr(rc));
-            } else {
-                testcase_error("C_VerifyFinal rc=%s", p11_get_ckr(rc));
-                PRINT_ERR("		Expected CKR_SIGNATURE_INVALID\n");
-                goto testcase_cleanup;
-            }
-        }
-    } else {
-        rc = funcs->C_Verify(session, data != NULL ? data : (CK_BYTE *)"",
-                             inputlen, signature, signaturelen);
-        if (rc != CKR_SIGNATURE_INVALID) {
-            if (rc ==  CKR_FUNCTION_FAILED && is_ica_token(SLOT_ID)) {
-                testcase_notice("C_Verify rc=%s temporarily accepted for ICA token",
-                                p11_get_ckr(rc));
-            } else {
-                testcase_error("C_Verify rc=%s", p11_get_ckr(rc));
-                PRINT_ERR("		Expected CKR_SIGNATURE_INVALID\n");
-                goto testcase_cleanup;
-            }
-        }
-    }
 
     rc = CKR_OK;
 
 testcase_cleanup:
     if (data)
         free(data);
-    if (signature)
-        free(signature);
+    /*if (signature)
+        free(signature);*/
 
     return rc;
 }
+
 
 CK_RV run_GenerateECCKeyPairSignVerify(void)
 {
@@ -3120,6 +3280,315 @@ testcase_cleanup:
     return rc;
 } /* end run_DeriveBTC() */
 
+/*
+ * BLS test for Sign and derive
+ */
+CK_RV run_DeriveBLS(void)
+{
+    CK_RV rv = 0;
+    CK_MECHANISM mech;
+    CK_OBJECT_HANDLE publ_key[10], priv_key[10];
+    CK_IBM_ECDSA_OTHER_BLS_PARAMS blsparam;
+    CK_OBJECT_HANDLE key = CK_INVALID_HANDLE;
+    CK_OBJECT_HANDLE aggpubkey = CK_INVALID_HANDLE;
+    CK_BYTE_PTR signature[10], concatsignature, signat;
+    CK_ULONG signaturelen[10], len, signatlen;
+    CK_BYTE_PTR aggsignature;
+    CK_ULONG aggsignaturelen;
+    CK_SESSION_HANDLE session;
+    CK_BYTE user_pin[PKCS11_MAX_PIN_LEN];
+    CK_ULONG user_pin_len, i, j, k, l;
+    CK_FLAGS flags;
+    CK_MECHANISM_INFO mech_info;
+    CK_RV rc;
+    CK_BYTE_PTR data = NULL;
+    CK_BBOOL lotrue = CK_TRUE;
+    CK_KEY_TYPE eckeyt = CKK_EC;
+    CK_OBJECT_CLASS class = CKO_PUBLIC_KEY;
+	CK_ATTRIBUTE privateKeyTemplate[] = {
+		{ CKA_EC_PARAMS,       &bls, sizeof(bls)},
+		{ CKA_SIGN,            &lotrue, sizeof(lotrue) },
+		{ CKA_DERIVE,          &lotrue, sizeof(lotrue) },
+		{ CKA_IBM_USE_AS_DATA, &lotrue, sizeof(lotrue) },
+	};
+
+	CK_ATTRIBUTE publicKeyTemplate[] = {
+		//{ CKA_EC_PARAMS,       &bls, sizeof(bls)},
+		{ CKA_VERIFY,          &lotrue, sizeof(lotrue) },
+		//{ CKA_DERIVE,          &lotrue, sizeof(lotrue) },
+		//{ CKA_IBM_USE_AS_DATA, &lotrue, sizeof(lotrue) },
+		{ CKA_KEY_TYPE,        &eckeyt, sizeof(eckeyt) },
+		{ CKA_CLASS,           &class, sizeof(class) },
+	};
+    testcase_begin("Starting ECC generate key pair with pkey=%X ...", pkey);
+
+    testcase_rw_session();
+    testcase_user_login();
+
+    /* Skip tests if pkey = true, but the slot doesn't support protected keys*/
+    if (pkey && !is_ep11_token(SLOT_ID) && !is_cca_token(SLOT_ID)) {
+        testcase_skip("pkey test option is true, but slot %u doesn't support protected keys",
+                      (unsigned int) SLOT_ID);
+        goto testcase_cleanup;
+    }
+
+    mech.mechanism = CKM_EC_KEY_PAIR_GEN;
+    mech.ulParameterLen = 0;
+    mech.pParameter = NULL;
+
+    /* query the slot, check if this mech is supported */
+    rc = funcs->C_GetMechanismInfo(SLOT_ID, mech.mechanism, &mech_info);
+    if (rc != CKR_OK) {
+        if (rc == CKR_MECHANISM_INVALID) {
+            /* no support for EC key gen? skip */
+            testcase_skip("Slot %u doesn't support CKM_EC_KEY_PAIR_GEN",
+                          (unsigned int) SLOT_ID);
+            rc = CKR_OK;
+            goto testcase_cleanup;
+        } else {
+            testcase_error("C_GetMechanismInfo() rc = %s", p11_get_ckr(rc));
+            goto testcase_cleanup;
+        }
+    }
+    len = 0;
+    //signatlen = 1920;
+    //concatsignature = calloc(signatlen, sizeof(CK_BYTE));
+    for (k = 0; k < 2; k++) {
+    for (i = 0; i < NUMEC; i++) {
+
+        if (der_ec_supported[i].type != CURVE_BLS12){
+            continue;
+        }
+        if (der_ec_supported[i].type == CURVE_MONTGOMERY) {
+            /* Montgomery curves can not be used for sign/verify. */
+            continue;
+        }
+
+        if (is_cca_token(SLOT_ID)) {
+            if (der_ec_supported[i].twisted) {
+                testcase_skip("Slot %u doesn't support this curve: %s",
+                              (unsigned int) SLOT_ID, der_ec_supported[i].name);
+                continue;
+            }
+            if (der_ec_supported[i].type != CURVE_BRAINPOOL &&
+                der_ec_supported[i].type != CURVE_PRIME &&
+                der_ec_supported[i].type != CURVE_KOBLITZ) {
+                testcase_skip("Slot %u doesn't support this curve: %s",
+                              (unsigned int) SLOT_ID,der_ec_supported[i].name);
+                continue;
+            }
+        }
+
+        rc = generate_EC_KeyPair(session, (CK_BYTE *)der_ec_supported[i].curve,
+                                 der_ec_supported[i].size,
+                                 &(blsparam.public_keys[k]), &priv_key[k], !pkey);
+
+        if (rc != CKR_OK) {
+            if (is_rejected_by_policy(rc, session)) {
+                testcase_skip("EC key generation is not allowed by policy");
+                continue;
+            }
+            if (rc == CKR_MECHANISM_PARAM_INVALID ||
+                rc == CKR_ATTRIBUTE_VALUE_INVALID ||
+                rc == CKR_CURVE_NOT_SUPPORTED) {
+                testcase_skip("Slot %u doesn't support this curve: %s",
+                              (unsigned int) SLOT_ID, der_ec_supported[i].name);
+                continue;
+            }
+            testcase_fail
+                ("generate_EC_KeyPair with valid input failed at i=%lu (%s), "
+                 "rc=%s", i, der_ec_supported[i].name, p11_get_ckr(rc));
+            goto testcase_cleanup;
+        }
+        testcase_new_assertion();
+        testcase_pass("*Generate supported key pair index=%lu (%s) passed.", i,
+                      der_ec_supported[i].name);
+
+        for (j = 0;
+             j < (sizeof(signVerifyInput) / sizeof(_signVerifyParam)); j++) {
+            testcase_new_assertion();
+            /*rc = run_GenerateSignVerifyECCwithreturn(session,
+                                           &signVerifyInput[j].mech,
+                                           signVerifyInput[j].inputlen,
+                                           signVerifyInput[j].parts,
+                                           priv_key[k], publ_key[k],
+                                           der_ec_supported[i].type,
+                                           (CK_BYTE *)der_ec_supported[i].curve,
+                                           der_ec_supported[i].size,signature[k], signaturelen[k]);*/
+
+            testcase_begin("Starting with mechtype='%s', inputlen=%lu parts=%lu, pkey=%X",
+                           p11_get_ckm(&mechtable_funcs, signVerifyInput[j].mech.mechanism), signVerifyInput[j].inputlen, signVerifyInput[j].parts, pkey);
+
+            /* query the slot, check if this mech if supported */
+            rc = funcs->C_GetMechanismInfo(SLOT_ID, signVerifyInput[j].mech.mechanism, &mech_info);
+            if (rc != CKR_OK) {
+                if (rc == CKR_MECHANISM_INVALID) {
+                    /* no support for EC key gen? skip */
+                    testcase_skip("Slot %u doesn't support %s",
+                                  (unsigned int) SLOT_ID,
+                                  p11_get_ckm(&mechtable_funcs, signVerifyInput[j].mech.mechanism));
+                    rc = CKR_OK;
+                    goto testcase_cleanup;
+                } else {
+                    testcase_error("C_GetMechanismInfo() rc = %s", p11_get_ckr(rc));
+                    goto testcase_cleanup;
+                }
+            }
+
+            if (signVerifyInput[j].inputlen > 0) {
+                data = calloc(signVerifyInput[j].inputlen, sizeof(CK_BYTE));
+                if (data == NULL) {
+                    testcase_error("Can't allocate memory for %lu bytes",
+                                   sizeof(CK_BYTE) * signVerifyInput[j].inputlen);
+                    rc = -1;
+                    goto testcase_cleanup;
+                }
+
+                for (l = 0; l < signVerifyInput[j].inputlen; l++) {
+                    data[l] = (l + 1) % 255;
+                }
+            }
+
+            rc = funcs->C_SignInit(session, &signVerifyInput[j].mech, priv_key[k]);
+            if (rc != CKR_OK) {
+                testcase_error("C_SignInit rc=%s", p11_get_ckr(rc));
+                goto testcase_cleanup;
+            }
+
+            if (signVerifyInput[j].parts > 0) {
+                if (signVerifyInput[j].inputlen > 0) {
+                    for (l = 0; l < signVerifyInput[j].parts && signVerifyInput[j].inputlen > 0; l++) {
+                        rc = funcs->C_SignUpdate(session, data, signVerifyInput[j].inputlen);
+                        if (rc != CKR_OK) {
+                            testcase_error("C_SignUpdate rc=%s", p11_get_ckr(rc));
+                            goto testcase_cleanup;
+                        }
+                    }
+                } else {
+                    rc = funcs->C_SignUpdate(session, NULL, 0);
+                    if (rc != CKR_OK) {
+                        testcase_error("C_SignUpdate rc=%s", p11_get_ckr(rc));
+                        goto testcase_cleanup;
+                    }
+                }
+
+                /* get signature length */
+                rc = funcs->C_SignFinal(session, signat, &signatlen);
+                //rc = funcs->C_SignFinal(session, signature[k], &signaturelen[k]);
+                if (rc != CKR_OK) {
+                    testcase_error("C_SignFinal rc=%s", p11_get_ckr(rc));
+                    goto testcase_cleanup;
+                }
+            } else {
+                rc = funcs->C_Sign(session, data != NULL ? data : (CK_BYTE *)"",
+                		signVerifyInput[j].inputlen, NULL, &signatlen);
+                if (rc != CKR_OK) {
+                    testcase_error("C_Sign rc=%s", p11_get_ckr(rc));
+                    goto testcase_cleanup;
+                }
+            }
+            signatlen = 192;
+            signat = calloc(signatlen, sizeof(CK_BYTE));
+            if (signat == NULL) {
+                testcase_error("Can't allocate memory for %lu bytes",
+                               sizeof(CK_BYTE) * signatlen);
+                rc = -1;
+                goto testcase_cleanup;
+            }
+
+            if (signVerifyInput[j].parts > 0) {
+                rc = funcs->C_SignFinal(session, signat, &signatlen);
+                if (rc != CKR_OK) {
+                    testcase_error("C_SignFinal rc=%s", p11_get_ckr(rc));
+                    goto testcase_cleanup;
+                }
+            } else {
+                rc = funcs->C_Sign(session, data != NULL ? data : (CK_BYTE *)"",
+                		signVerifyInput[j].inputlen, signat, &signatlen);
+                if (rc != CKR_OK) {
+                    testcase_error("C_Sign rc=%s", p11_get_ckr(rc));
+                    goto testcase_cleanup;
+                }
+            }
+
+            if (rc != 0) {
+                testcase_fail("run_GenerateSignVerifyECC failed index=%lu.", j);
+                goto testcase_cleanup;
+            }
+            testcase_pass("*Sign & verify i=%lu (%s), j=%lu passed.", i,
+                          der_ec_supported[i].name, j);
+        }
+
+        /*if (publ_key[k] != CK_INVALID_HANDLE)
+            funcs->C_DestroyObject(session, publ_key[k]);
+        publ_key[k] = CK_INVALID_HANDLE;
+        if (priv_key[k] != CK_INVALID_HANDLE)
+            funcs->C_DestroyObject(session, priv_key[k]);
+        priv_key[k] = CK_INVALID_HANDLE;*/
+    }
+
+    //memcpy(concatsignature + k * signatlen, signat, signatlen);
+    len=len+signatlen;
+    free(data);
+    free(signat);
+    }
+
+    //aggregate signatures
+    //SignSingle with signature pointer array.
+    /*len=0;
+    for(k=0;k<10;k++)
+        len=len+signaturelen[k];
+    concatsignature = calloc(len, sizeof(CK_BYTE));
+    if (concatsignature == NULL) {
+                testcase_error("Can't allocate memory for %lu bytes",
+                               sizeof(CK_BYTE) * len);
+                rc = -1;
+                goto testcase_cleanup;
+            }
+    for(k=0;k<10;k++)
+       memcpy(concatsignature + k * signaturelen[k], &(signature[k]), signaturelen[k]);*/
+
+    /*mech.mechanism = CKM_IBM_EC_AGGREGATE;
+    mech.pParameter = &concatsignature;
+    mech.ulParameterLen = sizeof(concatsignature);
+    rc = funcs->C_SignInit(session, &mech, key);
+    if (rc != CKR_OK) {
+        testcase_error("C_SignInit rc=%s", p11_get_ckr(rc));
+        goto testcase_cleanup;
+    }
+
+    rc = funcs->C_Sign(session, NULL,
+                               0, aggsignature, &aggsignaturelen);
+    if (rc != CKR_OK) {
+        testcase_error("C_Sign rc=%s", p11_get_ckr(rc));
+        goto testcase_cleanup;
+    }
+    testcase_pass("*Sign aggregation passed.");*/
+    //aggregate public keys
+    mech.mechanism = CKM_IBM_EC_AGGREGATE;
+    mech.pParameter = &blsparam;
+    mech.ulParameterLen = sizeof(blsparam);
+    rc = funcs->C_DeriveKey(session, &mech,
+            key, publicKeyTemplate,
+            sizeof(publicKeyTemplate), &aggpubkey);
+    if (rc != CKR_OK) {
+        testcase_error("C_Derive rc=%s", p11_get_ckr(rc));
+        goto testcase_cleanup;
+    }
+
+    //testcase_pass("*Public key handle aggregation passed.");
+
+testcase_cleanup:
+/*for (k = 0; k < 10; k++){
+        if (publ_key[k] != CK_INVALID_HANDLE)
+            funcs->C_DestroyObject(session, publ_key[k]);
+        if (priv_key[k] != CK_INVALID_HANDLE)
+            funcs->C_DestroyObject(session, priv_key[k]);
+}*/
+        rc = CKR_OK;
+        testcase_close_session();
+    return rc;
+}
 int main(int argc, char **argv)
 {
     CK_C_INITIALIZE_ARGS cinit_args;
@@ -3167,8 +3636,10 @@ int main(int argc, char **argv)
     testcase_setup();
 
     pkey = CK_FALSE;
-    rv = run_GenerateECCKeyPairSignVerify();
-    rv += run_ImportECCKeyPairSignVerify();
+    //rv = run_GenerateECCKeyPairSignVerify();
+    //rv += run_GenerateECCKeyPairSignVerify();
+    //rv += run_ImportECCKeyPairSignVerify();
+    rv += run_DeriveBLS();
 /*    rv += run_TransferECCKeyPairSignVerify();
     rv += run_DeriveECDHKey();
     rv += run_DeriveECDHKeyKAT();

@@ -1017,6 +1017,13 @@ static CK_RV policy_is_mech_allowed(policy_t p, CK_MECHANISM_PTR mech,
                 break;
             }
             break;
+        case CKM_IBM_EC_AGGREGATE:
+                if (/*mech->ulParameterLen != sizeof(CK_IBM_BTC_DERIVE_PARAMS) ||*/
+                    mech->pParameter == NULL) {
+                    TRACE_ERROR("Invalid mechanism parameter\n");
+                    rv = CKR_MECHANISM_PARAM_INVALID;
+                    break;
+                }
         case CKM_IBM_BTC_DERIVE:
             if (mech->ulParameterLen != sizeof(CK_IBM_BTC_DERIVE_PARAMS) ||
                 mech->pParameter == NULL) {
@@ -1276,6 +1283,7 @@ static CK_RV policy_update_mech_info(policy_t p, CK_MECHANISM_TYPE mech,
         case CKM_IBM_ED448_SHA3:
         case CKM_IBM_ECDSA_OTHER:
         case CKM_IBM_BTC_DERIVE:
+        case CKM_IBM_EC_AGGREGATE:
         case CKM_ECDH_AES_KEY_WRAP:
             if (policy_update_ec(pp, info) != CKR_OK) {
                 TRACE_DEVEL("Mechanism 0x%lx blocked by policy!\n", mech);

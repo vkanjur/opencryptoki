@@ -37,6 +37,7 @@
 #define CURVE512        0x0200
 #define CURVE521        0x0209
 #define CURVE768        0x0312
+#define CURVE1536        0x0600
 
 /* Supported Elliptic Curves */
 #define NUMEC           25      /* number of supported curves */

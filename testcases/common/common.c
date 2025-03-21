@@ -630,19 +630,22 @@ CK_RV generate_EC_KeyPair(CK_SESSION_HANDLE session,
     CK_BYTE id[] = { 123 };
     CK_BBOOL true = TRUE;
 	CK_BBOOL lotrue = CK_TRUE;
-
+    CK_KEY_TYPE eckeyt = CKK_EC;
+    CK_OBJECT_CLASS class = CKO_PUBLIC_KEY;
 	CK_ATTRIBUTE privateKeyTemplate[] = {
 		{ CKA_EC_PARAMS,       ec_params, ec_params_len},
 		{ CKA_SIGN,            &lotrue, sizeof(lotrue) },
 		{ CKA_DERIVE,          &lotrue, sizeof(lotrue) },
-		{ CKA_IBM_USE_AS_DATA, &lotrue, sizeof(lotrue) },
+		//{ CKA_IBM_USE_AS_DATA, &lotrue, sizeof(lotrue) },
 	};
 
 	CK_ATTRIBUTE publicKeyTemplate[] = {
 		{ CKA_EC_PARAMS,       ec_params, ec_params_len},
 		{ CKA_VERIFY,          &lotrue, sizeof(lotrue) },
 		{ CKA_DERIVE,          &lotrue, sizeof(lotrue) },
-		{ CKA_IBM_USE_AS_DATA, &lotrue, sizeof(lotrue) },
+		//{ CKA_IBM_USE_AS_DATA, &lotrue, sizeof(lotrue) },
+		{ CKA_KEY_TYPE,        &eckeyt, sizeof(eckeyt) },
+		{ CKA_CLASS,           &class, sizeof(class) },
 	};
     /*CK_ATTRIBUTE publicKeyTemplate[] = {
         {CKA_VERIFY, &true, sizeof(true)},
