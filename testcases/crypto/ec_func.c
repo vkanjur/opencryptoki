@@ -274,7 +274,7 @@ _signVerifyParam signVerifyInput[] = {
     {{CKM_IBM_ED448_SHA3, NULL, 0}, 100, 0},
     {{CKM_IBM_ECDSA_OTHER, &other_rand, sizeof(other_rand)}, 20, 0},
     {{CKM_IBM_ECDSA_OTHER, &other_compr_multi, sizeof(other_compr_multi)}, 20, 0},*/
-    {{CKM_IBM_ECDSA_OTHER, &other_bls, sizeof(other_bls)}, 20, 0},
+    {{CKM_IBM_ECDSA_OTHER, &other_bls, sizeof(other_bls)}, 20, 0}
 };
 
 #define NUM_KDFS sizeof(kdfs)/sizeof(CK_EC_KDF_TYPE)
@@ -1741,7 +1741,7 @@ CK_RV run_GenerateSignVerifyECC(CK_SESSION_HANDLE session,
         rc = CKR_OK;
         goto testcase_cleanup;
     } else {
-        if (curve_type == CURVE_EDWARDS || curve_type == CURVE_MONTGOMERY || curve_type == CURVE_BLS12) {
+        if (curve_type == CURVE_EDWARDS || curve_type == CURVE_MONTGOMERY /*|| curve_type == CURVE_BLS12*/) {
             /* Mechanism does not match to curve type, skip */
             rc = CKR_OK;
             goto testcase_cleanup;
@@ -1818,7 +1818,7 @@ CK_RV run_GenerateSignVerifyECC(CK_SESSION_HANDLE session,
             goto testcase_cleanup;
         }
     }
-    //signaturelen = 192;
+    signaturelen = 192;
     signature = calloc(signaturelen, sizeof(CK_BYTE));
     if (signature == NULL) {
         testcase_error("Can't allocate memory for %lu bytes",
