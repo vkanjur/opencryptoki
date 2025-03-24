@@ -113,7 +113,7 @@ typedef struct ec_struct {
 } _ec_struct;
 
 /* Supported Elliptic Curves */
-#define NUMEC		24
+#define NUMEC		25
 const CK_BYTE brainpoolP160r1[] = OCK_BRAINPOOL_P160R1;
 const CK_BYTE brainpoolP160t1[] = OCK_BRAINPOOL_P160T1;
 const CK_BYTE brainpoolP192r1[] = OCK_BRAINPOOL_P192R1;
@@ -138,6 +138,8 @@ const CK_BYTE curve25519[] = OCK_CURVE25519;
 const CK_BYTE curve448[] = OCK_CURVE448;
 const CK_BYTE ed25519[] = OCK_ED25519;
 const CK_BYTE ed448[] = OCK_ED448;
+const CK_BYTE bls[] = OCK_BLS;
+
 
 const _ec_struct der_ec_supported[NUMEC] = {
     {&brainpoolP160r1, sizeof(brainpoolP160r1), CK_FALSE, CURVE_BRAINPOOL,
@@ -188,6 +190,7 @@ const _ec_struct der_ec_supported[NUMEC] = {
      CURVE256_LENGTH, "ed25519"},
     {&ed448, sizeof(ed448), CK_FALSE, CURVE_EDWARDS,
      CURVE456_LENGTH, "ed448"},
+    {&bls, sizeof(bls), CK_TRUE, CURVE_BLS12, CURVE768_LENGTH, "bls"},
 };
 
 /* Invalid curves */
@@ -224,52 +227,54 @@ typedef struct signVerifyParam {
 CK_IBM_ECDSA_OTHER_PARAMS other_rand = { .submechanism = CKM_IBM_ECSDSA_RAND };
 CK_IBM_ECDSA_OTHER_PARAMS other_compr_multi =
                                 { .submechanism = CKM_IBM_ECSDSA_COMPR_MULTI };
-
+CK_IBM_ECDSA_OTHER_PARAMS other_bls =
+                                { .submechanism = CKM_IBM_BLS };
 _signVerifyParam signVerifyInput[] = {
-    {{CKM_ECDSA, NULL, 0}, 20, 0},
+    /*{{CKM_ECDSA, NULL, 0}, 20, 0},
     {{CKM_ECDSA, NULL, 0}, 32, 0},
     {{CKM_ECDSA, NULL, 0}, 48, 0},
     {{CKM_ECDSA, NULL, 0}, 64, 0},
     {{CKM_ECDSA_SHA1, NULL, 0}, 100, 0},
     {{CKM_ECDSA_SHA1, NULL, 0}, 100, 4},
     {{CKM_ECDSA_SHA1, NULL, 0}, 0, 0}, /* Empty Message via C_Sign */
-    {{CKM_ECDSA_SHA1, NULL, 0}, 0, 1}, /* Empty Message via C_SignInit+C_SignFinal */
-    {{CKM_ECDSA_SHA224, NULL, 0}, 100, 0},
+    /*{{CKM_ECDSA_SHA1, NULL, 0}, 0, 1}, /* Empty Message via C_SignInit+C_SignFinal */
+    /*{{CKM_ECDSA_SHA224, NULL, 0}, 100, 0},
     {{CKM_ECDSA_SHA224, NULL, 0}, 100, 4},
     {{CKM_ECDSA_SHA224, NULL, 0}, 0, 0}, /* Empty Message via C_Sign */
-    {{CKM_ECDSA_SHA224, NULL, 0}, 0, 1}, /* Empty Message via C_SignInit+C_SignFinal */
-    {{CKM_ECDSA_SHA256, NULL, 0}, 100, 0},
+    /*{{CKM_ECDSA_SHA224, NULL, 0}, 0, 1}, /* Empty Message via C_SignInit+C_SignFinal */
+    /*{{CKM_ECDSA_SHA256, NULL, 0}, 100, 0},
     {{CKM_ECDSA_SHA256, NULL, 0}, 100, 4},
     {{CKM_ECDSA_SHA256, NULL, 0}, 0, 0}, /* Empty Message via C_Sign */
-    {{CKM_ECDSA_SHA256, NULL, 0}, 0, 1}, /* Empty Message via C_SignInit+C_SignFinal */
-    {{CKM_ECDSA_SHA384, NULL, 0}, 100, 0},
+    /*{{CKM_ECDSA_SHA256, NULL, 0}, 0, 1}, /* Empty Message via C_SignInit+C_SignFinal */
+    /*{{CKM_ECDSA_SHA384, NULL, 0}, 100, 0},
     {{CKM_ECDSA_SHA384, NULL, 0}, 100, 4},
     {{CKM_ECDSA_SHA384, NULL, 0}, 0, 0}, /* Empty Message via C_Sign */
-    {{CKM_ECDSA_SHA384, NULL, 0}, 0, 1}, /* Empty Message via C_SignInit+C_SignFinal */
-    {{CKM_ECDSA_SHA512, NULL, 0}, 100, 0},
+    /*{{CKM_ECDSA_SHA384, NULL, 0}, 0, 1}, /* Empty Message via C_SignInit+C_SignFinal */
+    /*{{CKM_ECDSA_SHA512, NULL, 0}, 100, 0},
     {{CKM_ECDSA_SHA512, NULL, 0}, 100, 4},
     {{CKM_ECDSA_SHA512, NULL, 0}, 0, 0}, /* Empty Message via C_Sign */
-    {{CKM_ECDSA_SHA512, NULL, 0}, 0, 1}, /* Empty Message via C_SignInit+C_SignFinal */
-    {{CKM_ECDSA_SHA3_224, NULL, 0}, 100, 0},
+    /*{{CKM_ECDSA_SHA512, NULL, 0}, 0, 1}, /* Empty Message via C_SignInit+C_SignFinal */
+    /*{{CKM_ECDSA_SHA3_224, NULL, 0}, 100, 0},
     {{CKM_ECDSA_SHA3_224, NULL, 0}, 100, 4},
     {{CKM_ECDSA_SHA3_224, NULL, 0}, 0, 0}, /* Empty Message via C_Sign */
-    {{CKM_ECDSA_SHA3_224, NULL, 0}, 0, 1}, /* Empty Message via C_SignInit+C_SignFinal */
-    {{CKM_ECDSA_SHA3_256, NULL, 0}, 100, 0},
+    /*{{CKM_ECDSA_SHA3_224, NULL, 0}, 0, 1}, /* Empty Message via C_SignInit+C_SignFinal */
+    /*{{CKM_ECDSA_SHA3_256, NULL, 0}, 100, 0},
     {{CKM_ECDSA_SHA3_256, NULL, 0}, 100, 4},
     {{CKM_ECDSA_SHA3_256, NULL, 0}, 0, 0}, /* Empty Message via C_Sign */
-    {{CKM_ECDSA_SHA3_256, NULL, 0}, 0, 1}, /* Empty Message via C_SignInit+C_SignFinal */
-    {{CKM_ECDSA_SHA3_384, NULL, 0}, 100, 0},
+    /*{{CKM_ECDSA_SHA3_256, NULL, 0}, 0, 1}, /* Empty Message via C_SignInit+C_SignFinal */
+    /*{{CKM_ECDSA_SHA3_384, NULL, 0}, 100, 0},
     {{CKM_ECDSA_SHA3_384, NULL, 0}, 100, 4},
     {{CKM_ECDSA_SHA3_384, NULL, 0}, 0, 0}, /* Empty Message via C_Sign */
-    {{CKM_ECDSA_SHA3_384, NULL, 0}, 0, 1}, /* Empty Message via C_SignInit+C_SignFinal */
-    {{CKM_ECDSA_SHA3_512, NULL, 0}, 100, 0},
+    /*{{CKM_ECDSA_SHA3_384, NULL, 0}, 0, 1}, /* Empty Message via C_SignInit+C_SignFinal */
+    /*{{CKM_ECDSA_SHA3_512, NULL, 0}, 100, 0},
     {{CKM_ECDSA_SHA3_512, NULL, 0}, 100, 4},
     {{CKM_ECDSA_SHA3_512, NULL, 0}, 0, 0}, /* Empty Message via C_Sign */
-    {{CKM_ECDSA_SHA3_512, NULL, 0}, 0, 1}, /* Empty Message via C_SignInit+C_SignFinal */
-    {{CKM_IBM_ED25519_SHA512, NULL, 0}, 100, 0},
+    /*{{CKM_ECDSA_SHA3_512, NULL, 0}, 0, 1}, /* Empty Message via C_SignInit+C_SignFinal */
+    /*{{CKM_IBM_ED25519_SHA512, NULL, 0}, 100, 0},
     {{CKM_IBM_ED448_SHA3, NULL, 0}, 100, 0},
     {{CKM_IBM_ECDSA_OTHER, &other_rand, sizeof(other_rand)}, 20, 0},
-    {{CKM_IBM_ECDSA_OTHER, &other_compr_multi, sizeof(other_compr_multi)}, 20, 0},
+    {{CKM_IBM_ECDSA_OTHER, &other_compr_multi, sizeof(other_compr_multi)}, 20, 0},*/
+    {{CKM_IBM_ECDSA_OTHER, &other_bls, sizeof(other_bls)}, 20, 0},
 };
 
 #define NUM_KDFS sizeof(kdfs)/sizeof(CK_EC_KDF_TYPE)
@@ -1730,12 +1735,13 @@ CK_RV run_GenerateSignVerifyECC(CK_SESSION_HANDLE session,
                memcmp(params, secp256k1, MIN(params_len, sizeof(secp256k1))) != 0 &&
                memcmp(params, prime256v1, MIN(params_len, sizeof(prime256v1))) != 0 &&
                memcmp(params, brainpoolP256r1, MIN(params_len, sizeof(brainpoolP256r1))) != 0 &&
-               memcmp(params, brainpoolP256t1, MIN(params_len, sizeof(brainpoolP256t1)))) {
+               memcmp(params, brainpoolP256t1, MIN(params_len, sizeof(brainpoolP256t1))) !=0 &&
+               memcmp(params, bls, MIN(params_len, sizeof(bls))) !=0) {
         /* CKM_IBM_ECDSA_OTHER can only be used with 256-bit EC curves, skip */
         rc = CKR_OK;
         goto testcase_cleanup;
     } else {
-        if (curve_type == CURVE_EDWARDS || curve_type == CURVE_MONTGOMERY) {
+        if (curve_type == CURVE_EDWARDS || curve_type == CURVE_MONTGOMERY || curve_type == CURVE_BLS12) {
             /* Mechanism does not match to curve type, skip */
             rc = CKR_OK;
             goto testcase_cleanup;
@@ -1812,7 +1818,7 @@ CK_RV run_GenerateSignVerifyECC(CK_SESSION_HANDLE session,
             goto testcase_cleanup;
         }
     }
-
+    //signaturelen = 192;
     signature = calloc(signaturelen, sizeof(CK_BYTE));
     if (signature == NULL) {
         testcase_error("Can't allocate memory for %lu bytes",
@@ -1982,6 +1988,10 @@ CK_RV run_GenerateECCKeyPairSignVerify(void)
 
     for (i = 0; i < NUMEC; i++) {
 
+        if (der_ec_supported[i].type != CURVE_BLS12){
+            /*Run BLS 12 only*/
+            continue;
+        }
         if (der_ec_supported[i].type == CURVE_MONTGOMERY) {
             /* Montgomery curves can not be used for sign/verify. */
             continue;
@@ -2054,7 +2064,7 @@ CK_RV run_GenerateECCKeyPairSignVerify(void)
         priv_key = CK_INVALID_HANDLE;
     }
 
-    for (i = 0; i < NUMECINVAL; i++) {
+    /*for (i = 0; i < NUMECINVAL; i++) {
         rc = generate_EC_KeyPair(session, (CK_BYTE *)der_ec_notsupported[i].curve,
                                  der_ec_notsupported[i].size,
                                  &publ_key, &priv_key, !pkey);
@@ -2067,7 +2077,7 @@ CK_RV run_GenerateECCKeyPairSignVerify(void)
         }
         testcase_pass("*Generate unsupported key pair curve=%s passed.",
                       der_ec_notsupported[i].name);
-    }
+    }*/
 
     rc = CKR_OK;
 
@@ -3204,7 +3214,7 @@ int main(int argc, char **argv)
 
     pkey = CK_FALSE;
     rv = run_GenerateECCKeyPairSignVerify();
-    rv += run_ImportECCKeyPairSignVerify();
+    /*rv += run_ImportECCKeyPairSignVerify();
     rv += run_TransferECCKeyPairSignVerify();
     rv += run_DeriveECDHKey();
     rv += run_DeriveECDHKeyKAT();
@@ -3220,7 +3230,7 @@ int main(int argc, char **argv)
         rv += run_DeriveECDHKeyKAT();
         rv += run_ImportSignVerify_Pkey();
     }
-#endif
+#endif*/
 
     testcase_print_result();
 

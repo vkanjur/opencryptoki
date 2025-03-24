@@ -5496,6 +5496,7 @@ static CK_BBOOL ep11tok_ec_curve_supported2(STDLL_TokData_t *tokdata,
     case PRIME_CURVE:
     case BRAINPOOL_CURVE:
     case KOBLITZ_CURVE:
+    case BLS12_CURVE:
         break;
 
     case MONTGOMERY_CURVE:
@@ -9470,6 +9471,9 @@ static CK_RV ep11tok_ecdsa_other_mech_adjust(CK_MECHANISM *mech,
     case CKM_IBM_ECSDSA_COMPR_MULTI:
         mech_ep11->param = ECSG_IBM_ECSDSA_COMPR_MULTI;
         break;
+    case CKM_IBM_BLS:
+        mech_ep11->param = ECSG_IBM_BLS;
+        break;
     default:
        TRACE_ERROR("%s Invalid sub mechanism for CKM_IBM_ECDSA_OTHER: %lu\n",
                    __func__, param->submechanism);
@@ -9543,8 +9547,10 @@ CK_RV ep11tok_sign_init(STDLL_TokData_t * tokdata, SESSION * session,
     size_t ep11_sign_state_l = MAX_SIGN_STATE_BYTES * 2;
     CK_BYTE *ep11_sign_state = calloc(ep11_sign_state_l, 1);
     struct ECDSA_OTHER_MECH_PARAM mech_ep11;
-    CK_BYTE *useblob, *usestate;
-    size_t useblobsize, usestate_len;
+    CK_BYTE *usestate = NULL;
+    CK_BYTE *useblob = NULL;
+    size_t useblobsize = 0;
+    size_t usestate_len = 0;
     CK_ULONG strength_index = POLICY_STRENGTH_IDX_0;
     CK_MECHANISM ep11_mech;
 
@@ -9924,8 +9930,8 @@ CK_RV ep11tok_sign_single(STDLL_TokData_t *tokdata, SESSION *session,
     CK_BYTE *keyblob;
     OBJECT *key_obj = NULL;
     struct ECDSA_OTHER_MECH_PARAM mech_ep11;
-    CK_BYTE *useblob;
-    size_t useblobsize;
+    CK_BYTE *useblob = NULL;
+    size_t useblobsize = 0;
     CK_MECHANISM ep11_mech;
 
     UNUSED(length_only);

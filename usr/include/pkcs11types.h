@@ -1757,6 +1757,7 @@ typedef CK_IBM_ECDSA_OTHER_PARAMS CK_PTR CK_IBM_ECDSA_OTHER_PARAMS_PTR;
 /* CKM_IBM_ECDSA_OTHER sub-mechanisms */
 #define CKM_IBM_ECSDSA_RAND                 3
 #define CKM_IBM_ECSDSA_COMPR_MULTI          5
+#define CKM_IBM_BLS                         6
 
 #define CKF_INTERFACE_FORK_SAFE     0x00000001UL
 
