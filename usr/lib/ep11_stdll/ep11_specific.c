@@ -5496,6 +5496,7 @@ static CK_BBOOL ep11tok_ec_curve_supported2(STDLL_TokData_t *tokdata,
     case PRIME_CURVE:
     case BRAINPOOL_CURVE:
     case KOBLITZ_CURVE:
+    case BLS12_CURVE:
         break;
 
     case MONTGOMERY_CURVE:
@@ -9469,6 +9470,9 @@ static CK_RV ep11tok_ecdsa_other_mech_adjust(CK_MECHANISM *mech,
         break;
     case CKM_IBM_ECSDSA_COMPR_MULTI:
         mech_ep11->param = ECSG_IBM_ECSDSA_COMPR_MULTI;
+        break;
+    case CKM_IBM_BLS:
+        mech_ep11->param = ECSG_IBM_BLS;
         break;
     default:
        TRACE_ERROR("%s Invalid sub mechanism for CKM_IBM_ECDSA_OTHER: %lu\n",

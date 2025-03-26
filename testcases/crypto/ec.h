@@ -14,6 +14,7 @@ enum curve_type {
     CURVE_EDWARDS = 3,
     CURVE_MONTGOMERY = 4,
     CURVE_KOBLITZ = 5,
+    CURVE_BLS12 = 6,
 };
 
 struct EC_TEST_VECTOR {

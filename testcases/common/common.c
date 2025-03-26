@@ -632,18 +632,20 @@ CK_RV generate_EC_KeyPair(CK_SESSION_HANDLE session,
     CK_ATTRIBUTE publicKeyTemplate[] = {
         {CKA_VERIFY, &true, sizeof(true)},
         {CKA_EC_PARAMS, ec_params, ec_params_len},
-        {CKA_IBM_PROTKEY_EXTRACTABLE, &pkeyextractable, sizeof(CK_BBOOL)},
+        //{CKA_IBM_PROTKEY_EXTRACTABLE, &pkeyextractable, sizeof(CK_BBOOL)},
+        {CKA_IBM_USE_AS_DATA, &true, sizeof(true)}
     };
     CK_ATTRIBUTE privateKeyTemplate[] = {
-        {CKA_TOKEN, &true, sizeof(true)},
+        /*{CKA_TOKEN, &true, sizeof(true)},
         {CKA_PRIVATE, &true, sizeof(true)},
         {CKA_SUBJECT, subject, 0},
         {CKA_ID, id, sizeof(id)},
-        {CKA_SENSITIVE, &true, sizeof(true)},
+        {CKA_SENSITIVE, &true, sizeof(true)},*/
         {CKA_SIGN, &true, sizeof(true)},
         {CKA_DERIVE, &true, sizeof(true)},
-        {CKA_EXTRACTABLE, &extractable, sizeof(CK_BBOOL)},
-        {CKA_IBM_PROTKEY_EXTRACTABLE, &pkeyextractable, sizeof(CK_BBOOL)},
+        /*{CKA_EXTRACTABLE, &extractable, sizeof(CK_BBOOL)},
+        {CKA_IBM_PROTKEY_EXTRACTABLE, &pkeyextractable, sizeof(CK_BBOOL)},*/
+        {CKA_IBM_USE_AS_DATA, &true, sizeof(true)}
     };
     CK_ULONG num_publ_attrs = sizeof(publicKeyTemplate) / sizeof(CK_ATTRIBUTE);
     CK_ULONG num_priv_attrs = sizeof(privateKeyTemplate) / sizeof(CK_ATTRIBUTE);

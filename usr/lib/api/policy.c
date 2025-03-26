@@ -505,6 +505,9 @@ static CK_RV policy_get_sig_size(CK_MECHANISM_PTR mech, struct objstrength *s,
             case CKM_IBM_ECSDSA_COMPR_MULTI:
                 *ssize = MIN(s->siglen, 256); /* Uses SHA-256 internally */
                 break;
+            case CKM_IBM_BLS:
+                *ssize = MIN(s->siglen, 768); /* 96 bytes */
+                break;
             default:
                 return CKR_FUNCTION_FAILED;
             }
@@ -1009,6 +1012,8 @@ static CK_RV policy_is_mech_allowed(policy_t p, CK_MECHANISM_PTR mech,
                     TRACE_WARNING("POLICY VIOLATION: ECDSA OTHER SHA-256 algorithm not allowed by policy.\n");
                     rv = CKR_FUNCTION_FAILED;
                 }
+                break;
+            case CKM_IBM_BLS:
                 break;
             default:
                 rv = CKR_FUNCTION_FAILED;
