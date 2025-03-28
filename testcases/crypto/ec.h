@@ -14,7 +14,7 @@ enum curve_type {
     CURVE_EDWARDS = 3,
     CURVE_MONTGOMERY = 4,
     CURVE_KOBLITZ = 5,
-    CURVE_BLS12 = 6,
+    CURVE_BLS12_381 = 6,
 };
 
 struct EC_TEST_VECTOR {
@@ -604,6 +604,8 @@ struct EC_TEST_VECTOR ec_tv[] = {
 #define CURVE456_LENGTH        0x01C8
 #define CURVE512_LENGTH        0x0200
 #define CURVE521_LENGTH        0x0209
+#define CURVE768_LENGTH        0x0300
+#define CURVE1536_LENGTH       0x0600
 
 // EC test vectors for ECDH
 #define NUM_SECRET_KEY_LENGTHS sizeof(secret_key_len)/sizeof(CK_ULONG)

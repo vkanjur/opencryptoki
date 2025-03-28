@@ -506,7 +506,7 @@ static CK_RV policy_get_sig_size(CK_MECHANISM_PTR mech, struct objstrength *s,
                 *ssize = MIN(s->siglen, 256); /* Uses SHA-256 internally */
                 break;
             case CKM_IBM_BLS:
-                *ssize = MIN(s->siglen, 768); /* 96 bytes */
+                *ssize = MIN(s->siglen, 1536); /* 96 bytes */
                 break;
             default:
                 return CKR_FUNCTION_FAILED;

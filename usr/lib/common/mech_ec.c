@@ -1259,7 +1259,7 @@ CK_RV ec_uncompress_public_key(CK_BYTE *curve, CK_ULONG curve_len,
         return CKR_CURVE_NOT_SUPPORTED;
 
     if (type == MONTGOMERY_CURVE || type == EDWARDS_CURVE ||
-        type == BLS12_CURVE) {
+        type == BLS12_381_CURVE) {
         /*
          * Public keys of Montgomery and Edwards curves are always compressed
          * and are not uncompressed.

@@ -138,7 +138,7 @@ const CK_BYTE curve25519[] = OCK_CURVE25519;
 const CK_BYTE curve448[] = OCK_CURVE448;
 const CK_BYTE ed25519[] = OCK_ED25519;
 const CK_BYTE ed448[] = OCK_ED448;
-const CK_BYTE bls[] = OCK_BLS;
+const CK_BYTE bls12_381[] = OCK_BLS12_381;
 
 const _ec_struct der_ec_supported[NUMEC] = {
     {&brainpoolP160r1, sizeof(brainpoolP160r1), CK_FALSE, CURVE_BRAINPOOL,
@@ -189,7 +189,8 @@ const _ec_struct der_ec_supported[NUMEC] = {
      CURVE256_LENGTH, "ed25519"},
     {&ed448, sizeof(ed448), CK_FALSE, CURVE_EDWARDS,
      CURVE456_LENGTH, "ed448"},
-    {&bls, sizeof(bls), CK_TRUE, CURVE_BLS12, CURVE768_LENGTH, "bls"},
+    {&bls12_381, sizeof(bls12_381), CK_TRUE, CURVE_BLS12_381,
+     CURVE1536_LENGTH, "bls12_381"},
 };
 
 /* Invalid curves */
@@ -1736,7 +1737,7 @@ CK_RV run_GenerateSignVerifyECC(CK_SESSION_HANDLE session,
                memcmp(params, prime256v1, MIN(params_len, sizeof(prime256v1))) != 0 &&
                memcmp(params, brainpoolP256r1, MIN(params_len, sizeof(brainpoolP256r1))) != 0 &&
                memcmp(params, brainpoolP256t1, MIN(params_len, sizeof(brainpoolP256t1))) !=0 &&
-               memcmp(params, bls, MIN(params_len, sizeof(bls))) !=0) {
+               memcmp(params, bls12_381, MIN(params_len, sizeof(bls12_381))) !=0) {
         /* CKM_IBM_ECDSA_OTHER can only be used with 256-bit EC curves, skip */
         rc = CKR_OK;
         goto testcase_cleanup;
@@ -1988,7 +1989,7 @@ CK_RV run_GenerateECCKeyPairSignVerify(void)
 
     for (i = 0; i < NUMEC; i++) {
 
-        if (der_ec_supported[i].type != CURVE_BLS12){
+        if (der_ec_supported[i].type != CURVE_BLS12_381){
             /*Run BLS 12 only*/
             continue;
         }
