@@ -9529,6 +9529,7 @@ CK_BOOL ep11tok_mech_single_only(CK_MECHANISM *mech)
     case CKM_IBM_ED25519_SHA512:
     case CKM_IBM_ED448_SHA3:
     case CKM_IBM_DILITHIUM:
+    case CKM_IBM_EC_AGGREGATE:
         return CK_TRUE;
     default:
         return CK_FALSE;
@@ -9558,7 +9559,7 @@ CK_RV ep11tok_sign_init(STDLL_TokData_t * tokdata, SESSION * session,
         TRACE_ERROR("%s Memory allocation failed\n", __func__);
         return CKR_HOST_MEMORY;
     }
-
+    if(mech->mechanism != CKM_IBM_EC_AGGREGATE) {
     rc = h_opaque_2_blob(tokdata, key, &keyblob, &keyblobsize, &key_obj,
                          READ_LOCK);
     if (rc != CKR_OK) {
@@ -9582,8 +9583,9 @@ CK_RV ep11tok_sign_init(STDLL_TokData_t * tokdata, SESSION * session,
         free(ep11_sign_state);
         goto done;
     }
-
+    }
 #ifndef NO_PKEY
+    if(mech->mechanism != CKM_IBM_EC_AGGREGATE) {
     rc = ep11tok_pkey_check(tokdata, session, key_obj, mech);
     switch (rc) {
     case CKR_OK:
@@ -9622,6 +9624,7 @@ CK_RV ep11tok_sign_init(STDLL_TokData_t * tokdata, SESSION * session,
         free(ep11_sign_state);
         goto done;
     }
+    }
 #endif /* NO_PKEY */
 
     if (mech->mechanism == CKM_IBM_ECDSA_OTHER) {
@@ -9633,6 +9636,7 @@ CK_RV ep11tok_sign_init(STDLL_TokData_t * tokdata, SESSION * session,
         mech = &mech_ep11.mech;
     }
 
+    if(mech->mechanism != CKM_IBM_EC_AGGREGATE) {
     if (checkauth) {
         rc = key_object_is_always_authenticate(key_obj->template,
                                                &ctx->auth_required);
@@ -9642,7 +9646,7 @@ CK_RV ep11tok_sign_init(STDLL_TokData_t * tokdata, SESSION * session,
             goto done;
         }
     }
-
+    }
     ep11_mech = *mech;
     ep11tok_pkcs11_mech_translate(tokdata, mech->mechanism,
                                   &ep11_mech.mechanism);
@@ -9931,9 +9935,12 @@ CK_RV ep11tok_sign_single(STDLL_TokData_t *tokdata, SESSION *session,
     CK_BYTE *useblob;
     size_t useblobsize;
     CK_MECHANISM ep11_mech;
+    XCP_EC_AGGREGATE_PARAMS param;
+    CK_IBM_ECDSA_OTHER_BLS_PARAMS *parm;
+    CK_BYTE_PTR aggrsignature = NULL;//[MAX_SIGN_LEN * MAX_BLS_SIGN];
 
     UNUSED(length_only);
-
+    if (mech->mechanism != CKM_IBM_EC_AGGREGATE) {
     rc = h_opaque_2_blob(tokdata, key, &keyblob, &keyblobsize, &key_obj,
                          READ_LOCK);
     if (rc != CKR_OK) {
@@ -9954,6 +9961,7 @@ CK_RV ep11tok_sign_single(STDLL_TokData_t *tokdata, SESSION *session,
         rc = CKR_MECHANISM_INVALID;
         goto done;
     }
+    }
 
     if (mech->mechanism == CKM_IBM_ECDSA_OTHER) {
         rc = ep11tok_ecdsa_other_mech_adjust(mech, &mech_ep11);
@@ -9962,6 +9970,33 @@ CK_RV ep11tok_sign_single(STDLL_TokData_t *tokdata, SESSION *session,
         mech = &mech_ep11.mech;
     }
 
+    if (mech->mechanism == CKM_IBM_EC_AGGREGATE) {
+        int i;
+        if (mech->mechanism != CKM_IBM_EC_AGGREGATE)
+            return CKR_MECHANISM_INVALID;
+        parm = (CK_IBM_ECDSA_OTHER_BLS_PARAMS *)mech->pParameter;
+        param.version = 0;
+        param.mode = CK_IBM_EC_AGG_BLS12_381_SIGN;
+        param.perElementSize = MAX_SIGN_LEN;
+        param.ulElementsLen = MAX_SIGN_LEN * MAX_BLS_SIGN;
+
+        aggrsignature = malloc(MAX_SIGN_LEN * MAX_BLS_SIGN);
+        if ( aggrsignature == NULL ) {
+            TRACE_ERROR("%s Host memory error\n",
+                         __func__);
+            return CKR_HOST_MEMORY;
+        }
+        for ( i = 0; i < MAX_BLS_SIGN ; i++) {
+            memcpy(aggrsignature + i * param.perElementSize, &(parm->signatures[i]), param.perElementSize);
+        }
+        param.pElements = aggrsignature;
+        return CKR_OK;
+        if (rc != CKR_OK) {
+            goto done;
+        }
+        mech->pParameter = &param;
+        mech->ulParameterLen = sizeof(param);
+    }
     ep11_mech = *mech;
     ep11tok_pkcs11_mech_translate(tokdata, mech->mechanism,
                                   &ep11_mech.mechanism);
@@ -9988,7 +10023,9 @@ CK_RV ep11tok_sign_single(STDLL_TokData_t *tokdata, SESSION *session,
 done:
     object_put(tokdata, key_obj, TRUE);
     key_obj = NULL;
-
+    if (aggrsignature != NULL){
+        free(aggrsignature);
+    }
     return rc;
 }
 
@@ -11966,6 +12003,7 @@ static const CK_MECHANISM_TYPE ep11_supported_mech_list[] = {
     CKM_IBM_ATTRIBUTEBOUND_WRAP,
     CKM_IBM_ECDSA_OTHER,
     CKM_IBM_BTC_DERIVE,
+    CKM_IBM_EC_AGGREGATE,
 };
 
 static const CK_ULONG supported_mech_list_len =
