@@ -6896,6 +6896,15 @@ CK_RV ep11tok_derive_key(STDLL_TokData_t *tokdata, SESSION *session,
     CK_KEY_TYPE keytype;
     CK_BYTE *useblob;
     size_t useblobsize;
+    XCP_EC_AGGREGATE_PARAMS param;
+    CK_IBM_ECDSA_OTHER_BLS_PARAMS *blsparam;
+    CK_BYTE *spki_temp = NULL;
+    int i;
+    OBJECT *temp_obj = NULL;
+    CK_ULONG spki_temp_length = 0;
+    CK_BYTE_PTR concat_pubkey_spki = NULL;
+    CK_BYTE *keyblob_temp = NULL;
+    size_t keyblobsize_temp = 0;
 
     memset(newblob, 0, sizeof(newblob));
     memset(newblobreenc, 0, sizeof(newblobreenc));
@@ -7032,6 +7041,7 @@ CK_RV ep11tok_derive_key(STDLL_TokData_t *tokdata, SESSION *session,
             mech = &ecdh1_mech;
         }
     }
+    if(mech->mechanism != CKM_IBM_EC_AGGREGATE) {
 
     rc = h_opaque_2_blob(tokdata, hBaseKey, &keyblob, &keyblobsize,
                          &base_key_obj, READ_LOCK);
@@ -7096,7 +7106,7 @@ CK_RV ep11tok_derive_key(STDLL_TokData_t *tokdata, SESSION *session,
                     __func__, rc);
         goto error;
     }
-
+    }
     if (mech->mechanism == CKM_ECDH1_DERIVE ||
         mech->mechanism == CKM_IBM_EC_X25519 ||
         mech->mechanism == CKM_IBM_EC_X448) {
@@ -7135,12 +7145,17 @@ CK_RV ep11tok_derive_key(STDLL_TokData_t *tokdata, SESSION *session,
         }
     }
 
-    rc = force_ab_sensitive(&new_attrs, &new_attrs_len, ktype);
-    if (rc != CKR_OK) {
+    if (mech->mechanism == CKM_IBM_EC_AGGREGATE) {
+        ktype = CKK_EC;
+        class = CKO_PUBLIC_KEY;
+    }
+    if (mech->mechanism != CKM_IBM_EC_AGGREGATE) {
+        rc = force_ab_sensitive(&new_attrs, &new_attrs_len, ktype);
+        if (rc != CKR_OK) {
         TRACE_ERROR("%s force attribute bound key sensitive failed: rc=0x%lx\n",
                     __func__, rc);
         goto error;
-    }
+        }
 
     rc = key_object_apply_template_attr(base_key_obj->template,
                                         CKA_DERIVE_TEMPLATE,
@@ -7149,6 +7164,7 @@ CK_RV ep11tok_derive_key(STDLL_TokData_t *tokdata, SESSION *session,
     if (rc != CKR_OK) {
         TRACE_DEVEL("key_object_apply_template_attr failed.\n");
         goto error;
+    }
     }
 
 #ifndef NO_PKEY
@@ -7159,6 +7175,7 @@ CK_RV ep11tok_derive_key(STDLL_TokData_t *tokdata, SESSION *session,
 #endif /* NO_PKEY */
 
     /* Start creating the key object */
+    if(mech->mechanism != CKM_IBM_EC_AGGREGATE) {
     rc = object_mgr_create_skel(tokdata, session, new_attrs1, new_attrs1_len,
                                 MODE_DERIVE, class, ktype, &key_obj);
     if (rc != CKR_OK) {
@@ -7166,7 +7183,15 @@ CK_RV ep11tok_derive_key(STDLL_TokData_t *tokdata, SESSION *session,
                     __func__, rc);
         goto error;
     }
-
+    } else {
+    rc = object_mgr_create_skel(tokdata, session, attrs, attrs_len,
+                                MODE_DERIVE, CKO_PUBLIC_KEY, ktype, &key_obj);
+        if (rc != CKR_OK) {
+            TRACE_ERROR("%s object_mgr_create_skel failed with rc=0x%lx\n",
+                        __func__, rc);
+            goto error;
+        }
+    }
     switch (mech->mechanism) {
     case CKM_SHA1_KEY_DERIVATION:
     case CKM_SHA224_KEY_DERIVATION:
@@ -7192,6 +7217,34 @@ CK_RV ep11tok_derive_key(STDLL_TokData_t *tokdata, SESSION *session,
     }
 
     switch (mech->mechanism) {
+    case CKM_IBM_EC_AGGREGATE:
+        param.version = 0;
+        param.mode = CK_IBM_EC_AGG_BLS12_381_PKEY;
+        blsparam = (CK_IBM_ECDSA_OTHER_BLS_PARAMS *)mech->pParameter;
+        concat_pubkey_spki = malloc(255*MAX_BLS_PUB_KEYS);
+        for(i =0; i < MAX_BLS_PUB_KEYS; i++) {
+        rc = h_opaque_2_blob(tokdata, blsparam->public_keys[i], &keyblob_temp, &keyblobsize_temp,
+                                 &temp_obj, READ_LOCK);
+        if (rc != CKR_OK) {
+            TRACE_ERROR("%s failed pub_key=0x%lx\n", __func__, i);
+            return rc;
+        }
+        rc = publ_key_get_spki(temp_obj->template, CKK_EC, FALSE,
+                               &spki_temp, &spki_temp_length);
+        if (rc != CKR_OK) {
+            TRACE_DEVEL("publ_key_get_spki failed\n");
+            return rc;
+        }
+        memcpy(concat_pubkey_spki + i * spki_temp_length, spki_temp, spki_temp_length);
+        object_put(tokdata, temp_obj, TRUE);
+        temp_obj = NULL;
+        }
+        param.perElementSize = spki_temp_length;
+        param.pElements = concat_pubkey_spki;     // needs to be contiguous
+        param.ulElementsLen = MAX_BLS_PUB_KEYS * spki_temp_length;
+        mech->pParameter = &param;
+        mech->ulParameterLen = sizeof(param);
+        break;
     case CKM_IBM_BTC_DERIVE:
         rc = ep11tok_btc_mech_pre_process(tokdata, key_obj, &new_attrs2,
                                           &new_attrs2_len);
@@ -7361,11 +7414,16 @@ error:
     if (allocated && ecpoint != NULL)
         free(ecpoint);
 
-    object_put(tokdata, base_key_obj, TRUE);
-    base_key_obj = NULL;
-    object_put(tokdata, kyber_secret_obj, TRUE);
-    kyber_secret_obj = NULL;
-
+    if (base_key_obj!= NULL){
+        object_put(tokdata, base_key_obj, TRUE);
+        base_key_obj = NULL;
+    }
+    if (kyber_secret_obj){
+        object_put(tokdata, kyber_secret_obj, TRUE);
+        kyber_secret_obj = NULL;
+    }
+    if (concat_pubkey_spki != NULL)
+        free(concat_pubkey_spki);
     return rc;
 }
 
@@ -9937,7 +9995,7 @@ CK_RV ep11tok_sign_single(STDLL_TokData_t *tokdata, SESSION *session,
     CK_MECHANISM ep11_mech;
     XCP_EC_AGGREGATE_PARAMS param;
     CK_IBM_ECDSA_OTHER_BLS_PARAMS *parm;
-    CK_BYTE_PTR aggrsignature = NULL;//[MAX_SIGN_LEN * MAX_BLS_SIGN];
+    CK_BYTE_PTR aggrsignature = NULL;
 
     UNUSED(length_only);
     if (mech->mechanism != CKM_IBM_EC_AGGREGATE) {

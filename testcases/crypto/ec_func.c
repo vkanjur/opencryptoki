@@ -3424,7 +3424,7 @@ CK_RV run_DeriveBLS(void)
     }
     testcase_pass("*Sign aggregation passed.");
     //aggregate public keys
-    /*mech.mechanism = CKM_IBM_EC_AGGREGATE;
+    mech.mechanism = CKM_IBM_EC_AGGREGATE;
     mech.pParameter = &blsparam;
     mech.ulParameterLen = sizeof(blsparam);
     rc = funcs->C_DeriveKey(session, &mech,
@@ -3433,10 +3433,10 @@ CK_RV run_DeriveBLS(void)
     if (rc != CKR_OK) {
         testcase_error("C_Derive rc=%s", p11_get_ckr(rc));
         goto testcase_cleanup;
-    }*/
+    }
 
 
-    //testcase_pass("*Public key handle aggregation passed.");
+    testcase_pass("*Public key handle aggregation passed.");
 
 testcase_cleanup:
 for (k = 0; k < 2; k++){
