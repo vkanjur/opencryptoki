@@ -1060,6 +1060,7 @@ CK_RV SC_CloseSession(STDLL_TokData_t *tokdata, ST_SESSION_HANDLE *sSession,
     }
 
     rc = session_mgr_close_session(tokdata, sSession->sessionh);
+
 done:
     if (sess != NULL)
         session_mgr_put(tokdata, sess);
@@ -3169,36 +3170,35 @@ CK_RV SC_SignInit(STDLL_TokData_t *tokdata, ST_SESSION_HANDLE *sSession,
          * In case of multi-part operations we are doing the SignInit when
          * SignUpdate comes into play.
          */
-        if(pMechanism->mechanism != CKM_IBM_EC_AGGREGATE) {
-        rc = ep11tok_check_single_mech_key(tokdata, sess, pMechanism, hKey,
-                                           OP_SIGN_INIT,
-                                           &sess->sign_ctx.auth_required);
-        if (rc != CKR_OK)
-            goto done;
-
-        sess->sign_ctx.init_pending = TRUE;
-        sess->sign_ctx.active = TRUE;
-        sess->sign_ctx.key = hKey;
-
-        sess->sign_ctx.mech.mechanism = pMechanism->mechanism;
-        if (pMechanism->pParameter && pMechanism->ulParameterLen > 0) {
-            sess->sign_ctx.mech.pParameter = malloc(pMechanism->ulParameterLen);
-            if (sess->sign_ctx.mech.pParameter) {
-                memcpy(sess->sign_ctx.mech.pParameter, pMechanism->pParameter,
-                       pMechanism->ulParameterLen);
-                sess->sign_ctx.mech.ulParameterLen = pMechanism->ulParameterLen;
-            } else {
-                TRACE_ERROR("%s Memory allocation failed\n", __func__);
-                rc = CKR_HOST_MEMORY;
-                sign_mgr_cleanup(tokdata, sess, &sess->sign_ctx);
+        if (pMechanism->mechanism != CKM_IBM_EC_AGGREGATE) {
+            rc = ep11tok_check_single_mech_key(tokdata, sess, pMechanism, hKey,
+                                               OP_SIGN_INIT,
+                                               &sess->sign_ctx.auth_required);
+            if (rc != CKR_OK)
                 goto done;
+
+            sess->sign_ctx.init_pending = TRUE;
+            sess->sign_ctx.active = TRUE;
+            sess->sign_ctx.key = hKey;
+
+            sess->sign_ctx.mech.mechanism = pMechanism->mechanism;
+            if (pMechanism->pParameter && pMechanism->ulParameterLen > 0) {
+                sess->sign_ctx.mech.pParameter = malloc(pMechanism->ulParameterLen);
+                if (sess->sign_ctx.mech.pParameter) {
+                    memcpy(sess->sign_ctx.mech.pParameter, pMechanism->pParameter,
+                           pMechanism->ulParameterLen);
+                    sess->sign_ctx.mech.ulParameterLen = pMechanism->ulParameterLen;
+                } else {
+                    TRACE_ERROR("%s Memory allocation failed\n", __func__);
+                    rc = CKR_HOST_MEMORY;
+                    sign_mgr_cleanup(tokdata, sess, &sess->sign_ctx);
+                    goto done;
+                }
+            } else {
+                sess->sign_ctx.mech.pParameter = NULL;
+                sess->sign_ctx.mech.ulParameterLen = 0;
             }
         } else {
-            sess->sign_ctx.mech.pParameter = NULL;
-            sess->sign_ctx.mech.ulParameterLen = 0;
-        }
-        }
-        else {
             rc = CKR_OK;
             sess->sign_ctx.init_pending = TRUE;
             sess->sign_ctx.active = TRUE;
@@ -3338,7 +3338,6 @@ done:
 
     if (sess != NULL)
         session_mgr_put(tokdata, sess);
-
     return rc;
 }
 

@@ -893,7 +893,7 @@ CK_RV sign_mgr_cleanup(STDLL_TokData_t *tokdata, SESSION *sess,
     ctx->auth_required = FALSE;
 
     if (ctx->mech.pParameter) {
-        free(ctx->mech.pParameter);
+        //free(ctx->mech.pParameter);
         ctx->mech.pParameter = NULL;
     }
 

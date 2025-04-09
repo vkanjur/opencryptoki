@@ -1760,8 +1760,8 @@ typedef CK_IBM_ECDSA_OTHER_PARAMS CK_PTR CK_IBM_ECDSA_OTHER_PARAMS_PTR;
 #define CKM_IBM_ECSDSA_COMPR_MULTI          5
 #define CKM_IBM_BLS                         6
 
-#define MAX_BLS_PUB_KEYS 2
-#define MAX_BLS_SIGN 2
+#define MAX_BLS_PUB_KEYS 10
+#define MAX_BLS_SIGN 10
 #define MAX_SIGN_LEN 192
 typedef struct CK_IBM_ECDSA_OTHER_BLS_PARAMS {
     CK_OBJECT_HANDLE public_keys[MAX_BLS_PUB_KEYS];

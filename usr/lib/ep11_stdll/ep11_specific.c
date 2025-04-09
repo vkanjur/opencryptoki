@@ -6894,15 +6894,13 @@ CK_RV ep11tok_derive_key(STDLL_TokData_t *tokdata, SESSION *session,
     struct EP11_KYBER_MECH mech_ep11;
     OBJECT *kyber_secret_obj = NULL;
     CK_KEY_TYPE keytype;
-    CK_BYTE *useblob;
-    size_t useblobsize;
+    CK_BYTE *useblob = NULL;
+    size_t useblobsize = 0;
     XCP_EC_AGGREGATE_PARAMS param;
-    CK_IBM_ECDSA_OTHER_BLS_PARAMS *blsparam;
-    CK_BYTE *spki_temp = NULL;
+    CK_IBM_ECDSA_OTHER_BLS_PARAMS *parambls;
     int i;
     OBJECT *temp_obj = NULL;
-    CK_ULONG spki_temp_length = 0;
-    CK_BYTE_PTR concat_pubkey_spki = NULL;
+    CK_BYTE * concat_pubkey_spki = NULL;
     CK_BYTE *keyblob_temp = NULL;
     size_t keyblobsize_temp = 0;
 
@@ -7041,7 +7039,7 @@ CK_RV ep11tok_derive_key(STDLL_TokData_t *tokdata, SESSION *session,
             mech = &ecdh1_mech;
         }
     }
-    if(mech->mechanism != CKM_IBM_EC_AGGREGATE) {
+    if(mech->mechanism != CKM_IBM_EC_AGGREGATE ) {
 
     rc = h_opaque_2_blob(tokdata, hBaseKey, &keyblob, &keyblobsize,
                          &base_key_obj, READ_LOCK);
@@ -7090,7 +7088,11 @@ CK_RV ep11tok_derive_key(STDLL_TokData_t *tokdata, SESSION *session,
         rc = CKR_KEY_TYPE_INCONSISTENT;
         goto error;
     }
-
+    }
+    if (mech->mechanism == CKM_IBM_EC_AGGREGATE) {
+        ktype = CKK_EC;
+        class = CKO_PUBLIC_KEY;
+    }
     rc = check_key_attributes(tokdata, ktype, class, attrs, attrs_len,
                               &new_attrs, &new_attrs_len, -1);
     if (rc != CKR_OK) {
@@ -7098,7 +7100,7 @@ CK_RV ep11tok_derive_key(STDLL_TokData_t *tokdata, SESSION *session,
                     "rc=0x%lx\n", __func__, rc);
         goto error;
     }
-
+    if (mech->mechanism != CKM_IBM_EC_AGGREGATE) {
     rc = check_ab_derive_attributes(tokdata, base_key_obj->template,
                                     &new_attrs, &new_attrs_len);
     if (rc != CKR_OK) {
@@ -7145,10 +7147,7 @@ CK_RV ep11tok_derive_key(STDLL_TokData_t *tokdata, SESSION *session,
         }
     }
 
-    if (mech->mechanism == CKM_IBM_EC_AGGREGATE) {
-        ktype = CKK_EC;
-        class = CKO_PUBLIC_KEY;
-    }
+
     if (mech->mechanism != CKM_IBM_EC_AGGREGATE) {
         rc = force_ab_sensitive(&new_attrs, &new_attrs_len, ktype);
         if (rc != CKR_OK) {
@@ -7175,7 +7174,7 @@ CK_RV ep11tok_derive_key(STDLL_TokData_t *tokdata, SESSION *session,
 #endif /* NO_PKEY */
 
     /* Start creating the key object */
-    if(mech->mechanism != CKM_IBM_EC_AGGREGATE) {
+    if (mech->mechanism != CKM_IBM_EC_AGGREGATE) {
     rc = object_mgr_create_skel(tokdata, session, new_attrs1, new_attrs1_len,
                                 MODE_DERIVE, class, ktype, &key_obj);
     if (rc != CKR_OK) {
@@ -7184,13 +7183,13 @@ CK_RV ep11tok_derive_key(STDLL_TokData_t *tokdata, SESSION *session,
         goto error;
     }
     } else {
-    rc = object_mgr_create_skel(tokdata, session, attrs, attrs_len,
-                                MODE_DERIVE, CKO_PUBLIC_KEY, ktype, &key_obj);
+        rc = object_mgr_create_skel(tokdata, session, attrs, attrs_len,
+                                        MODE_DERIVE, class, ktype, &key_obj);
         if (rc != CKR_OK) {
             TRACE_ERROR("%s object_mgr_create_skel failed with rc=0x%lx\n",
                         __func__, rc);
             goto error;
-        }
+    }
     }
     switch (mech->mechanism) {
     case CKM_SHA1_KEY_DERIVATION:
@@ -7220,28 +7219,37 @@ CK_RV ep11tok_derive_key(STDLL_TokData_t *tokdata, SESSION *session,
     case CKM_IBM_EC_AGGREGATE:
         param.version = 0;
         param.mode = CK_IBM_EC_AGG_BLS12_381_PKEY;
-        blsparam = (CK_IBM_ECDSA_OTHER_BLS_PARAMS *)mech->pParameter;
-        concat_pubkey_spki = malloc(255*MAX_BLS_PUB_KEYS);
-        for(i =0; i < MAX_BLS_PUB_KEYS; i++) {
-        rc = h_opaque_2_blob(tokdata, blsparam->public_keys[i], &keyblob_temp, &keyblobsize_temp,
+        parambls = (CK_IBM_ECDSA_OTHER_BLS_PARAMS *)mech->pParameter;
+
+        rc = h_opaque_2_blob(tokdata, parambls->public_keys[0], &keyblob_temp, &keyblobsize_temp,
+                                         &temp_obj, READ_LOCK);
+                if (rc != CKR_OK) {
+                    TRACE_ERROR("%s failed pub_key\n", __func__);
+                    return rc;
+                }
+        concat_pubkey_spki = malloc(MAX_BLS_PUB_KEYS * keyblobsize_temp);
+        object_put(tokdata, temp_obj, TRUE);
+        temp_obj = NULL;
+        for(i = 0; i < MAX_BLS_PUB_KEYS; i++) {
+        rc = h_opaque_2_blob(tokdata, parambls->public_keys[i], &keyblob_temp, &keyblobsize_temp,
                                  &temp_obj, READ_LOCK);
         if (rc != CKR_OK) {
             TRACE_ERROR("%s failed pub_key=0x%lx\n", __func__, i);
             return rc;
         }
-        rc = publ_key_get_spki(temp_obj->template, CKK_EC, FALSE,
-                               &spki_temp, &spki_temp_length);
-        if (rc != CKR_OK) {
-            TRACE_DEVEL("publ_key_get_spki failed\n");
-            return rc;
-        }
-        memcpy(concat_pubkey_spki + i * spki_temp_length, spki_temp, spki_temp_length);
+        memcpy(concat_pubkey_spki + i * keyblobsize_temp, keyblob_temp, keyblobsize_temp);
+        TRACE_DEBUG("%s pub key spki:\n", __func__);
+        TRACE_DEBUG_DUMP("    ", keyblob_temp, keyblobsize_temp);
         object_put(tokdata, temp_obj, TRUE);
         temp_obj = NULL;
         }
-        param.perElementSize = spki_temp_length;
+        param.perElementSize = keyblobsize_temp;
         param.pElements = concat_pubkey_spki;     // needs to be contiguous
-        param.ulElementsLen = MAX_BLS_PUB_KEYS * spki_temp_length;
+        param.ulElementsLen = (MAX_BLS_PUB_KEYS * keyblobsize_temp);
+        TRACE_ERROR("param.perElementSize = 0x%lx\n", param.perElementSize);
+        TRACE_ERROR("param.ulElementsLen = 0x%lx\n", param.ulElementsLen);
+        TRACE_DEBUG("%s concat_pubkey_spki:\n", __func__);
+        TRACE_DEBUG_DUMP("    ", concat_pubkey_spki, MAX_BLS_PUB_KEYS * keyblobsize_temp);
         mech->pParameter = &param;
         mech->ulParameterLen = sizeof(param);
         break;
@@ -7263,18 +7271,21 @@ CK_RV ep11tok_derive_key(STDLL_TokData_t *tokdata, SESSION *session,
     default:
         break;
     }
-
     trace_attributes(__func__, "Derive:", new_attrs2, new_attrs2_len);
-
+    trace_attributes(__func__, "Derive:", attrs, attrs_len);
+    TRACE_DEBUG("%s useblob:\n", __func__);
+    TRACE_DEBUG_DUMP("    ", useblob, useblobsize);
+    TRACE_DEBUG("%s ep11_pin_blob:\n", __func__);
+    TRACE_DEBUG_DUMP("    ", ep11_pin_blob, ep11_pin_blob_len);
     ep11_get_pin_blob(tokdata, ep11_session,
                       ep11_is_session_object(attrs, attrs_len),
                       ep11_is_private_object(attrs, attrs_len),
                       &ep11_pin_blob, &ep11_pin_blob_len);
 
     RETRY_SESSION_SINGLE_APQN_START(rc, tokdata)
-    RETRY_REENC_BLOB_START(tokdata, target_info, base_key_obj, keyblob,
+    /*RETRY_REENC_BLOB_START(tokdata, target_info, base_key_obj, keyblob,
                            keyblobsize, useblob, useblobsize, rc)
-    RETRY_REENC_CREATE_KEY_START()
+    RETRY_REENC_CREATE_KEY_START()*/
         if (ep11_pqc_obj_strength_supported(target_info, mech->mechanism,
                                             base_key_obj))
             rc = dll_m_DeriveKey(mech, new_attrs2, new_attrs2_len,
@@ -7284,17 +7295,20 @@ CK_RV ep11tok_derive_key(STDLL_TokData_t *tokdata, SESSION *session,
                                  target_info->target);
         else
             rc = CKR_KEY_SIZE_RANGE;
-    RETRY_REENC_CREATE_KEY_END(tokdata, session, target_info,
+    /*RETRY_REENC_CREATE_KEY_END(tokdata, session, target_info,
                                newblob, newblobreenc, newblobsize, rc)
-    RETRY_REENC_BLOB_END(tokdata, target_info, useblob, useblobsize, rc)
+    RETRY_REENC_BLOB_END(tokdata, target_info, useblob, useblobsize, rc)*/
     RETRY_SESSION_SINGLE_APQN_END(rc, tokdata, session)
 
     if (rc != CKR_OK) {
         rc = ep11_error_to_pkcs11_error(rc, session);
+        TRACE_DEBUG("%s BLOB\n", __func__);
+        TRACE_DEBUG_DUMP("   ", newblob, 255);
         TRACE_ERROR("%s hBaseKey=0x%lx rc=0x%lx handle=0x%lx blobsize=0x%zx\n",
                     __func__, hBaseKey, rc, *handle, newblobsize);
         goto error;
     }
+
     TRACE_INFO("%s hBaseKey=0x%lx rc=0x%lx handle=0x%lx blobsize=0x%zx\n",
                __func__, hBaseKey, rc, *handle, newblobsize);
 
@@ -9995,7 +10009,7 @@ CK_RV ep11tok_sign_single(STDLL_TokData_t *tokdata, SESSION *session,
     CK_MECHANISM ep11_mech;
     XCP_EC_AGGREGATE_PARAMS param;
     CK_IBM_ECDSA_OTHER_BLS_PARAMS *parm;
-    CK_BYTE_PTR aggrsignature = NULL;
+    CK_BYTE *aggrsignature = NULL;
 
     UNUSED(length_only);
     if (mech->mechanism != CKM_IBM_EC_AGGREGATE) {
@@ -10039,19 +10053,12 @@ CK_RV ep11tok_sign_single(STDLL_TokData_t *tokdata, SESSION *session,
         param.ulElementsLen = MAX_SIGN_LEN * MAX_BLS_SIGN;
 
         aggrsignature = malloc(MAX_SIGN_LEN * MAX_BLS_SIGN);
-        if ( aggrsignature == NULL ) {
-            TRACE_ERROR("%s Host memory error\n",
-                         __func__);
-            return CKR_HOST_MEMORY;
-        }
+
         for ( i = 0; i < MAX_BLS_SIGN ; i++) {
             memcpy(aggrsignature + i * param.perElementSize, &(parm->signatures[i]), param.perElementSize);
         }
         param.pElements = aggrsignature;
-        return CKR_OK;
-        if (rc != CKR_OK) {
-            goto done;
-        }
+
         mech->pParameter = &param;
         mech->ulParameterLen = sizeof(param);
     }
@@ -10079,9 +10086,11 @@ CK_RV ep11tok_sign_single(STDLL_TokData_t *tokdata, SESSION *session,
     }
 
 done:
+	if (mech->mechanism != CKM_IBM_EC_AGGREGATE) {
     object_put(tokdata, key_obj, TRUE);
     key_obj = NULL;
-    if (aggrsignature != NULL){
+	}
+    if (mech->mechanism == CKM_IBM_EC_AGGREGATE && aggrsignature != NULL){
         free(aggrsignature);
     }
     return rc;

@@ -3173,14 +3173,13 @@ CK_RV run_DeriveBLS(void)
 {
     CK_RV rv = 0;
     CK_MECHANISM mech;
-    CK_OBJECT_HANDLE publ_key[10], priv_key[10];
+    CK_OBJECT_HANDLE priv_key[10];
     CK_IBM_ECDSA_OTHER_BLS_PARAMS blsparam;
     CK_OBJECT_HANDLE key = CK_INVALID_HANDLE;
     CK_OBJECT_HANDLE aggpubkey = CK_INVALID_HANDLE;
-    CK_BYTE_PTR signature[10], concatsignature, signat;
-    CK_ULONG signaturelen[10], len, signatlen;
-    CK_BYTE_PTR aggsignature;
-    CK_ULONG aggsignaturelen;
+    CK_ULONG signatlen;
+    CK_BYTE aggsignature[1000];
+    CK_ULONG aggsignaturelen = 192;
     CK_SESSION_HANDLE session;
     CK_BYTE user_pin[PKCS11_MAX_PIN_LEN];
     CK_ULONG user_pin_len, i, j, k, l;
@@ -3191,20 +3190,16 @@ CK_RV run_DeriveBLS(void)
     CK_BBOOL lotrue = CK_TRUE;
     CK_KEY_TYPE eckeyt = CKK_EC;
     CK_OBJECT_CLASS class = CKO_PUBLIC_KEY;
-	CK_ATTRIBUTE privateKeyTemplate[] = {
-		{ CKA_SIGN,            &lotrue, sizeof(lotrue) },
-		{ CKA_DERIVE,          &lotrue, sizeof(lotrue) },
-		{ CKA_IBM_USE_AS_DATA, &lotrue, sizeof(lotrue) },
-	};
 
 	CK_ATTRIBUTE publicKeyTemplate[] = {
 		{ CKA_EC_PARAMS,       &bls12_381, sizeof(bls12_381)},
 		{ CKA_VERIFY,          &lotrue, sizeof(lotrue) },
 		{ CKA_DERIVE,          &lotrue, sizeof(lotrue) },
 		{ CKA_IBM_USE_AS_DATA, &lotrue, sizeof(lotrue) },
-		{ CKA_KEY_TYPE,        &eckeyt, sizeof(eckeyt) },
-		{ CKA_CLASS,           &class, sizeof(class) },
+		//{ CKA_KEY_TYPE,        &eckeyt, sizeof(eckeyt) },
+		//{ CKA_CLASS,           &class, sizeof(class) },
 	};
+	CK_ULONG pub_derive_tmpl_len = sizeof(publicKeyTemplate) / sizeof(CK_ATTRIBUTE);
     testcase_begin("Starting ECC generate key pair with pkey=%X ...", pkey);
 
     testcase_rw_session();
@@ -3235,10 +3230,8 @@ CK_RV run_DeriveBLS(void)
             goto testcase_cleanup;
         }
     }
-    len = 0;
-    //signatlen = 1920;
-    //concatsignature = calloc(signatlen, sizeof(CK_BYTE));
-    for (k = 0; k < 2; k++) {
+
+    for (k = 0; k < MAX_BLS_PUB_KEYS; k++) {
     for (i = 0; i < NUMEC; i++) {
 
         if (der_ec_supported[i].type != CURVE_BLS12_381){
@@ -3290,7 +3283,7 @@ CK_RV run_DeriveBLS(void)
                       der_ec_supported[i].name);
     }
     }
-    for(k=0; k<2; k++){
+    for(k=0; k<MAX_BLS_PUB_KEYS; k++){
 
         for (j = 0;
              j < (sizeof(signVerifyInput) / sizeof(_signVerifyParam)); j++) {
@@ -3395,21 +3388,53 @@ CK_RV run_DeriveBLS(void)
                 testcase_fail("run_GenerateSignVerifyECC failed index=%lu.", j);
                 goto testcase_cleanup;
             }
+            /****** Verify *******/
+            rc = funcs->C_VerifyInit(session, &signVerifyInput[j].mech, blsparam.public_keys[k]);
+            if (rc != CKR_OK) {
+                testcase_error("C_VerifyInit rc=%s", p11_get_ckr(rc));
+                goto testcase_cleanup;
+            }
+
+            if (signVerifyInput[j].parts > 0) {
+                if (signVerifyInput[j].inputlen > 0) {
+                    for (i = 0; i < signVerifyInput[j].parts && signVerifyInput[j].inputlen > 0; i++) {
+                        rc = funcs->C_VerifyUpdate(session, data, signVerifyInput[j].inputlen);
+                        if (rc != CKR_OK) {
+                            testcase_error("C_VerifyUpdate rc=%s", p11_get_ckr(rc));
+                            goto testcase_cleanup;
+                        }
+                    }
+                } else {
+                    rc = funcs->C_VerifyUpdate(session, NULL, 0);
+                    if (rc != CKR_OK) {
+                        testcase_error("C_VerifyUpdate rc=%s", p11_get_ckr(rc));
+                        goto testcase_cleanup;
+                    }
+                }
+
+                rc = funcs->C_VerifyFinal(session, &(blsparam.signatures[k][0]), signatlen);
+                if (rc != CKR_OK) {
+                    testcase_error("C_VerifyFinal rc=%s", p11_get_ckr(rc));
+                    goto testcase_cleanup;
+                }
+            } else {
+                rc = funcs->C_Verify(session, data != NULL ? data : (CK_BYTE *)"",
+                		signVerifyInput[j].inputlen, &(blsparam.signatures[k][0]), signatlen);
+                if (rc != CKR_OK) {
+                    testcase_error("C_Verify rc=%s", p11_get_ckr(rc));
+                    goto testcase_cleanup;
+                }
+            }
             testcase_pass("*Sign & verify k=%lu, j=%lu passed.", k, j);
         }
 
     }
-        /*if (publ_key[k] != CK_INVALID_HANDLE)
-            funcs->C_DestroyObject(session, publ_key[k]);
-        publ_key[k] = CK_INVALID_HANDLE;
-        if (priv_key[k] != CK_INVALID_HANDLE)
-            funcs->C_DestroyObject(session, priv_key[k]);
-        priv_key[k] = CK_INVALID_HANDLE;*/
-
 
     mech.mechanism = CKM_IBM_EC_AGGREGATE;
     mech.pParameter = &blsparam;
     mech.ulParameterLen = sizeof(blsparam);
+    testcase_new_assertion();
+    testcase_begin("starting sign aggregation ");
     rc = funcs->C_SignInit(session, &mech, key);
     if (rc != CKR_OK) {
         testcase_error("C_SignInit rc=%s", p11_get_ckr(rc));
@@ -3417,19 +3442,22 @@ CK_RV run_DeriveBLS(void)
     }
 
     rc = funcs->C_Sign(session, NULL,
-                               0, aggsignature, &aggsignaturelen);
+                       0, &(aggsignature[0]), &aggsignaturelen);
     if (rc != CKR_OK) {
         testcase_error("C_Sign rc=%s", p11_get_ckr(rc));
         goto testcase_cleanup;
     }
+
     testcase_pass("*Sign aggregation passed.");
+    rc = CKR_OK;
+
     //aggregate public keys
     mech.mechanism = CKM_IBM_EC_AGGREGATE;
     mech.pParameter = &blsparam;
     mech.ulParameterLen = sizeof(blsparam);
     rc = funcs->C_DeriveKey(session, &mech,
             key, publicKeyTemplate,
-            sizeof(publicKeyTemplate), &aggpubkey);
+            pub_derive_tmpl_len, &aggpubkey);
     if (rc != CKR_OK) {
         testcase_error("C_Derive rc=%s", p11_get_ckr(rc));
         goto testcase_cleanup;
@@ -3437,16 +3465,48 @@ CK_RV run_DeriveBLS(void)
 
 
     testcase_pass("*Public key handle aggregation passed.");
+    /*mech.mechanism = CKM_IBM_ECDSA_OTHER;
+    mech.pParameter = signVerifyInput[0].;
+    mech.ulParameterLen = sizeof(CK_ULONG);*/
+    if (signVerifyInput[0].inputlen > 0) {
+        //data = calloc(signVerifyInput[j].inputlen, sizeof(CK_BYTE));
+        if (data == NULL) {
+            testcase_error("Can't allocate memory for %lu bytes",
+                           sizeof(CK_BYTE) * signVerifyInput[0].inputlen);
+            rc = -1;
+            goto testcase_cleanup;
+        }
+
+        for (l = 0; l < signVerifyInput[0].inputlen; l++) {
+            data[l] = (l + 1) % 255;
+        }
+    }
+
+    rc = funcs->C_VerifyInit(session, &signVerifyInput[0].mech, aggpubkey);
+    if (rc != CKR_OK) {
+        testcase_error("C_VerifyInit rc=%s", p11_get_ckr(rc));
+        goto testcase_cleanup;
+    }
+    rc = funcs->C_Verify(session, data != NULL ? data : (CK_BYTE *)"",
+    		signVerifyInput[0].inputlen, &(aggsignature[0]), aggsignaturelen);
+    if (rc != CKR_OK) {
+        testcase_error("C_Verify rc=%s", p11_get_ckr(rc));
+        goto testcase_cleanup;
+    }
 
 testcase_cleanup:
-for (k = 0; k < 2; k++){
-        /*if (publ_key[k] != CK_INVALID_HANDLE)
-            funcs->C_DestroyObject(session, publ_key[k]);*/
+    /*for (k = 0; k < MAX_BLS_PUB_KEYS; k++){
+        if (blsparam.public_keys[k] != CK_INVALID_HANDLE)
+            funcs->C_DestroyObject(session, blsparam.public_keys[k]);
         if (priv_key[k] != CK_INVALID_HANDLE)
             funcs->C_DestroyObject(session, priv_key[k]);
-}
-        rc = CKR_OK;
-        testcase_close_session();
+    }*/
+    if (data != NULL){
+        free(data);
+    }
+    //free();
+    testcase_user_logout();
+    testcase_close_session();
     return rc;
 }
 int main(int argc, char **argv)

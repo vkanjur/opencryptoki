@@ -632,6 +632,7 @@ CK_RV generate_EC_KeyPair(CK_SESSION_HANDLE session,
     CK_ATTRIBUTE publicKeyTemplate[] = {
         {CKA_VERIFY, &true, sizeof(true)},
         {CKA_EC_PARAMS, ec_params, ec_params_len},
+		{CKA_DERIVE, &true, sizeof(true)},
         //{CKA_IBM_PROTKEY_EXTRACTABLE, &pkeyextractable, sizeof(CK_BBOOL)},
         {CKA_IBM_USE_AS_DATA, &true, sizeof(true)}
     };
