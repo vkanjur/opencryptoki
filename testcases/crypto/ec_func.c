@@ -3173,12 +3173,13 @@ CK_RV run_DeriveBLS(void)
 {
     CK_RV rv = 0;
     CK_MECHANISM mech;
-    CK_OBJECT_HANDLE priv_key[10];
-    CK_IBM_ECDSA_OTHER_BLS_PARAMS blsparam;
+    CK_OBJECT_HANDLE priv_key[20], pub_key[20];
+    CK_IBM_ECDSA_OTHER_BLS_PARAMS blsparam1, blsparam2;
     CK_OBJECT_HANDLE key = CK_INVALID_HANDLE;
     CK_OBJECT_HANDLE aggpubkey = CK_INVALID_HANDLE;
     CK_ULONG signatlen;
     CK_BYTE aggsignature[1000];
+    CK_BYTE signature[12][192];
     CK_ULONG aggsignaturelen = 192;
     CK_SESSION_HANDLE session;
     CK_BYTE user_pin[PKCS11_MAX_PIN_LEN];
@@ -3231,7 +3232,7 @@ CK_RV run_DeriveBLS(void)
         }
     }
 
-    for (k = 0; k < MAX_BLS_PUB_KEYS; k++) {
+    for (k = 0; k < CK_IBM_BLS_MAX_AGGREGATIONS; k++) {
     for (i = 0; i < NUMEC; i++) {
 
         if (der_ec_supported[i].type != CURVE_BLS12_381){
@@ -3259,7 +3260,7 @@ CK_RV run_DeriveBLS(void)
 
         rc = generate_EC_KeyPair(session, (CK_BYTE *)der_ec_supported[i].curve,
                                  der_ec_supported[i].size,
-                                 &(blsparam.public_keys[k]), &priv_key[k], !pkey);
+                                 &pub_key[k], &priv_key[k], !pkey);
 
         if (rc != CKR_OK) {
             if (is_rejected_by_policy(rc, session)) {
@@ -3282,8 +3283,13 @@ CK_RV run_DeriveBLS(void)
         testcase_pass("*Generate supported key pair index=%lu (%s) passed.", i,
                       der_ec_supported[i].name);
     }
+    //blsparam.ppublic_keys[k] = &(pub_key[k]);
+    blsparam1.pAggregateparam[k] = (CK_OBJECT_HANDLE_PTR)&(pub_key[k]);
     }
-    for(k=0; k<MAX_BLS_PUB_KEYS; k++){
+    blsparam1.numElements = CK_IBM_BLS_MAX_AGGREGATIONS;
+    blsparam2.numElements = CK_IBM_BLS_MAX_AGGREGATIONS;
+
+    for(k=0; k<blsparam1.numElements; k++){
 
         for (j = 0;
              j < (sizeof(signVerifyInput) / sizeof(_signVerifyParam)); j++) {
@@ -3370,14 +3376,14 @@ CK_RV run_DeriveBLS(void)
             }*/
 
             if (signVerifyInput[j].parts > 0) {
-                rc = funcs->C_SignFinal(session, &(blsparam.signatures[k][0]), &signatlen);
+                rc = funcs->C_SignFinal(session, signature[k], &signatlen);
                 if (rc != CKR_OK) {
                     testcase_error("C_SignFinal rc=%s", p11_get_ckr(rc));
                     goto testcase_cleanup;
                 }
             } else {
                 rc = funcs->C_Sign(session, data != NULL ? data : (CK_BYTE *)"",
-                signVerifyInput[j].inputlen, &(blsparam.signatures[k][0]), &signatlen);
+                signVerifyInput[j].inputlen, signature[k], &signatlen);
                 if (rc != CKR_OK) {
                     testcase_error("C_Sign rc=%s", p11_get_ckr(rc));
                     goto testcase_cleanup;
@@ -3389,7 +3395,7 @@ CK_RV run_DeriveBLS(void)
                 goto testcase_cleanup;
             }
             /****** Verify *******/
-            rc = funcs->C_VerifyInit(session, &signVerifyInput[j].mech, blsparam.public_keys[k]);
+            rc = funcs->C_VerifyInit(session, &signVerifyInput[j].mech, *(CK_OBJECT_HANDLE_PTR)blsparam1.pAggregateparam[k]);
             if (rc != CKR_OK) {
                 testcase_error("C_VerifyInit rc=%s", p11_get_ckr(rc));
                 goto testcase_cleanup;
@@ -3412,14 +3418,14 @@ CK_RV run_DeriveBLS(void)
                     }
                 }
 
-                rc = funcs->C_VerifyFinal(session, &(blsparam.signatures[k][0]), signatlen);
+                rc = funcs->C_VerifyFinal(session, signature[k], signatlen);
                 if (rc != CKR_OK) {
                     testcase_error("C_VerifyFinal rc=%s", p11_get_ckr(rc));
                     goto testcase_cleanup;
                 }
             } else {
                 rc = funcs->C_Verify(session, data != NULL ? data : (CK_BYTE *)"",
-                		signVerifyInput[j].inputlen, &(blsparam.signatures[k][0]), signatlen);
+                		signVerifyInput[j].inputlen, signature[k], signatlen);
                 if (rc != CKR_OK) {
                     testcase_error("C_Verify rc=%s", p11_get_ckr(rc));
                     goto testcase_cleanup;
@@ -3427,12 +3433,12 @@ CK_RV run_DeriveBLS(void)
             }
             testcase_pass("*Sign & verify k=%lu, j=%lu passed.", k, j);
         }
-
+        blsparam2.pAggregateparam[k] = (CK_BYTE_PTR)&(signature[k][0]);
     }
 
     mech.mechanism = CKM_IBM_EC_AGGREGATE;
-    mech.pParameter = &blsparam;
-    mech.ulParameterLen = sizeof(blsparam);
+    mech.pParameter = &blsparam2;
+    mech.ulParameterLen = sizeof(blsparam2);
     testcase_new_assertion();
     testcase_begin("starting sign aggregation ");
     rc = funcs->C_SignInit(session, &mech, key);
@@ -3453,8 +3459,8 @@ CK_RV run_DeriveBLS(void)
 
     //aggregate public keys
     mech.mechanism = CKM_IBM_EC_AGGREGATE;
-    mech.pParameter = &blsparam;
-    mech.ulParameterLen = sizeof(blsparam);
+    mech.pParameter = &blsparam1;
+    mech.ulParameterLen = sizeof(blsparam1);
     rc = funcs->C_DeriveKey(session, &mech,
             key, publicKeyTemplate,
             pub_derive_tmpl_len, &aggpubkey);
@@ -3465,9 +3471,7 @@ CK_RV run_DeriveBLS(void)
 
 
     testcase_pass("*Public key handle aggregation passed.");
-    /*mech.mechanism = CKM_IBM_ECDSA_OTHER;
-    mech.pParameter = signVerifyInput[0].;
-    mech.ulParameterLen = sizeof(CK_ULONG);*/
+
     if (signVerifyInput[0].inputlen > 0) {
         //data = calloc(signVerifyInput[j].inputlen, sizeof(CK_BYTE));
         if (data == NULL) {
@@ -3493,9 +3497,9 @@ CK_RV run_DeriveBLS(void)
         testcase_error("C_Verify rc=%s", p11_get_ckr(rc));
         goto testcase_cleanup;
     }
-
+    testcase_pass("*Verification aggregation passed.%d", aggsignaturelen);
 testcase_cleanup:
-    /*for (k = 0; k < MAX_BLS_PUB_KEYS; k++){
+    /*for (k = 0; k < CK_IBM_BLS_MAX_AGGREGATIONS; k++){
         if (blsparam.public_keys[k] != CK_INVALID_HANDLE)
             funcs->C_DestroyObject(session, blsparam.public_keys[k]);
         if (priv_key[k] != CK_INVALID_HANDLE)

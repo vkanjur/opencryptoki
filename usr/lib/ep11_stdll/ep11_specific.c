@@ -7220,18 +7220,18 @@ CK_RV ep11tok_derive_key(STDLL_TokData_t *tokdata, SESSION *session,
         param.version = 0;
         param.mode = CK_IBM_EC_AGG_BLS12_381_PKEY;
         parambls = (CK_IBM_ECDSA_OTHER_BLS_PARAMS *)mech->pParameter;
-
-        rc = h_opaque_2_blob(tokdata, parambls->public_keys[0], &keyblob_temp, &keyblobsize_temp,
+        if (parambls->numElements>0){
+        rc = h_opaque_2_blob(tokdata, *(CK_OBJECT_HANDLE_PTR)parambls->pAggregateparam[0], &keyblob_temp, &keyblobsize_temp,
                                          &temp_obj, READ_LOCK);
                 if (rc != CKR_OK) {
                     TRACE_ERROR("%s failed pub_key\n", __func__);
                     return rc;
                 }
-        concat_pubkey_spki = malloc(MAX_BLS_PUB_KEYS * keyblobsize_temp);
+        concat_pubkey_spki = malloc(parambls->numElements * keyblobsize_temp);
         object_put(tokdata, temp_obj, TRUE);
         temp_obj = NULL;
-        for(i = 0; i < MAX_BLS_PUB_KEYS; i++) {
-        rc = h_opaque_2_blob(tokdata, parambls->public_keys[i], &keyblob_temp, &keyblobsize_temp,
+        for(i = 0; i < CK_IBM_BLS_MAX_AGGREGATIONS; i++) {
+        rc = h_opaque_2_blob(tokdata, *(CK_OBJECT_HANDLE_PTR)parambls->pAggregateparam[i], &keyblob_temp, &keyblobsize_temp,
                                  &temp_obj, READ_LOCK);
         if (rc != CKR_OK) {
             TRACE_ERROR("%s failed pub_key=0x%lx\n", __func__, i);
@@ -7243,13 +7243,14 @@ CK_RV ep11tok_derive_key(STDLL_TokData_t *tokdata, SESSION *session,
         object_put(tokdata, temp_obj, TRUE);
         temp_obj = NULL;
         }
+        }
         param.perElementSize = keyblobsize_temp;
         param.pElements = concat_pubkey_spki;     // needs to be contiguous
-        param.ulElementsLen = (MAX_BLS_PUB_KEYS * keyblobsize_temp);
+        param.ulElementsLen = (parambls->numElements * keyblobsize_temp);
         TRACE_ERROR("param.perElementSize = 0x%lx\n", param.perElementSize);
         TRACE_ERROR("param.ulElementsLen = 0x%lx\n", param.ulElementsLen);
         TRACE_DEBUG("%s concat_pubkey_spki:\n", __func__);
-        TRACE_DEBUG_DUMP("    ", concat_pubkey_spki, MAX_BLS_PUB_KEYS * keyblobsize_temp);
+        TRACE_DEBUG_DUMP("    ", concat_pubkey_spki, parambls->numElements * keyblobsize_temp);
         mech->pParameter = &param;
         mech->ulParameterLen = sizeof(param);
         break;
@@ -10049,13 +10050,14 @@ CK_RV ep11tok_sign_single(STDLL_TokData_t *tokdata, SESSION *session,
         parm = (CK_IBM_ECDSA_OTHER_BLS_PARAMS *)mech->pParameter;
         param.version = 0;
         param.mode = CK_IBM_EC_AGG_BLS12_381_SIGN;
-        param.perElementSize = MAX_SIGN_LEN;
-        param.ulElementsLen = MAX_SIGN_LEN * MAX_BLS_SIGN;
+        param.perElementSize = CK_IBM_BLS12_381_SIGN_LEN;
+        param.ulElementsLen = CK_IBM_BLS12_381_SIGN_LEN * parm->numElements;
 
-        aggrsignature = malloc(MAX_SIGN_LEN * MAX_BLS_SIGN);
+        aggrsignature = malloc(CK_IBM_BLS12_381_SIGN_LEN * parm->numElements);
 
-        for ( i = 0; i < MAX_BLS_SIGN ; i++) {
-            memcpy(aggrsignature + i * param.perElementSize, &(parm->signatures[i]), param.perElementSize);
+        for ( i = 0; i < parm->numElements ; i++) {
+        	memcpy(aggrsignature + i * param.perElementSize, (CK_BYTE_PTR)parm->pAggregateparam[i], param.perElementSize);
+            //memcpy(aggrsignature + i * param.perElementSize, &(parm->signatures[i]), param.perElementSize);
         }
         param.pElements = aggrsignature;
 
