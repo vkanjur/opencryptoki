@@ -3334,7 +3334,7 @@ CK_RV run_DeriveBLS(void)
                 goto testcase_cleanup;
             }
 
-            /*if (signVerifyInput[j].parts > 0) {
+            if (signVerifyInput[j].parts > 0) {
                 if (signVerifyInput[j].inputlen > 0) {
                     for (l = 0; l < signVerifyInput[j].parts && signVerifyInput[j].inputlen > 0; l++) {
                         rc = funcs->C_SignUpdate(session, data, signVerifyInput[j].inputlen);
@@ -3352,8 +3352,8 @@ CK_RV run_DeriveBLS(void)
                 }
 
                 /* get signature length */
-                //rc = funcs->C_SignFinal(session, signat, &signatlen);
-                /*rc = funcs->C_SignFinal(session, blsparam.signatures[k], &signaturelen[k]);
+                /*rc = funcs->C_SignFinal(session, NULL, &signatlen);
+                //rc = funcs->C_SignFinal(session, blsparam.signatures[k], &signaturelen[k]);
                 if (rc != CKR_OK) {
                     testcase_error("C_SignFinal rc=%s", p11_get_ckr(rc));
                     goto testcase_cleanup;
@@ -3364,16 +3364,8 @@ CK_RV run_DeriveBLS(void)
                 if (rc != CKR_OK) {
                     testcase_error("C_Sign rc=%s", p11_get_ckr(rc));
                     goto testcase_cleanup;
-                }
-            }*/
-            signatlen = 192;
-            //blsparam.signatures[k] = calloc(signatlen, sizeof(CK_BYTE));
-            /*if (signat == NULL) {
-                testcase_error("Can't allocate memory for %lu bytes",
-                               sizeof(CK_BYTE) * signatlen);
-                rc = -1;
-                goto testcase_cleanup;
-            }*/
+                }*/
+            }
 
             if (signVerifyInput[j].parts > 0) {
                 rc = funcs->C_SignFinal(session, signature[k], &signatlen);
@@ -3385,6 +3377,7 @@ CK_RV run_DeriveBLS(void)
                 rc = funcs->C_Sign(session, data != NULL ? data : (CK_BYTE *)"",
                 signVerifyInput[j].inputlen, signature[k], &signatlen);
                 if (rc != CKR_OK) {
+                	testcase_error("C_Sign rc=%d", signatlen);
                     testcase_error("C_Sign rc=%s", p11_get_ckr(rc));
                     goto testcase_cleanup;
                 }
@@ -3562,8 +3555,8 @@ int main(int argc, char **argv)
     pkey = CK_FALSE;
     rv = run_GenerateECCKeyPairSignVerify();
     rv += run_DeriveBLS();
-    /*rv += run_ImportECCKeyPairSignVerify();
-    rv += run_TransferECCKeyPairSignVerify();
+    rv += run_ImportECCKeyPairSignVerify();
+    /*rv += run_TransferECCKeyPairSignVerify();
     rv += run_DeriveECDHKey();
     rv += run_DeriveECDHKeyKAT();
     rv += run_DeriveBTC();

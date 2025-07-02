@@ -3887,7 +3887,7 @@ static CK_RV import_EC_key(STDLL_TokData_t *tokdata, SESSION *sess,
         }
 
         /* CKA_EC_POINT is an BER encoded OCTET STRING. Extract it. */
-        rc = ber_decode_OCTET_STRING((CK_BYTE *)ec_point_attr->pValue, &ecpoint,
+        /*rc = ber_decode_OCTET_STRING((CK_BYTE *)ec_point_attr->pValue, &ecpoint,
                                      &ecpoint_len, &field_len);
         if (rc != CKR_OK || ec_point_attr->ulValueLen != field_len) {
             TRACE_DEVEL("%s ber_decode_OCTET_STRING failed\n", __func__);
@@ -3896,12 +3896,12 @@ static CK_RV import_EC_key(STDLL_TokData_t *tokdata, SESSION *sess,
         }
 
         /* Uncompress the public key (EC_POINT) */
-        rc = get_ecsiglen(ec_key_obj, &privkey_len);
+        /*rc = get_ecsiglen(ec_key_obj, &privkey_len);
         if (rc != CKR_OK)
             goto import_EC_key_end;
         privkey_len /= 2; /* private key is half the size of an EC signature */
 
-        pubkey_len = 1 + 2 * privkey_len;
+        /*pubkey_len = 1 + 2 * privkey_len;
         pubkey = (CK_BYTE *)malloc(pubkey_len);
         if (pubkey == NULL) {
             rc = CKR_HOST_MEMORY;
@@ -3915,7 +3915,7 @@ static CK_RV import_EC_key(STDLL_TokData_t *tokdata, SESSION *sess,
             goto import_EC_key_end;
 
         /* build ec-point attribute as BER encoded OCTET STRING */
-        rc = ber_encode_OCTET_STRING(FALSE, &ecpoint, &ecpoint_len,
+        /*rc = ber_encode_OCTET_STRING(FALSE, &ecpoint, &ecpoint_len,
                                      pubkey, pubkey_len);
         if (rc != CKR_OK) {
             TRACE_DEVEL("ber_encode_OCTET_STRING failed\n");
@@ -3929,7 +3929,7 @@ static CK_RV import_EC_key(STDLL_TokData_t *tokdata, SESSION *sess,
         /*
          * Builds the DER encoding (ansi_x962) SPKI.
          */
-        rc = ber_encode_ECPublicKey(FALSE, &data, &data_len,
+        /*rc = ber_encode_ECPublicKey(FALSE, &data, &data_len,
                                     ec_params, &ec_point_uncompr);
         free(ecpoint);
         if (rc != CKR_OK) {
@@ -3939,11 +3939,13 @@ static CK_RV import_EC_key(STDLL_TokData_t *tokdata, SESSION *sess,
         } else {
             TRACE_INFO("%s public key import class=0x%lx rc=0x%lx "
                        "data_len=0x%lx\n", __func__, class, rc, data_len);
-        }
+        }*/
 
         /* save the SPKI as blob although it is not a blob.
          * The card expects MACed-SPKIs as public keys.
          */
+        data = ec_point_attr->pValue;
+        data_len = ec_point_attr->ulValueLen;
         rc = make_maced_spki(tokdata, sess, ec_key_obj, NULL, 0,
                              data, data_len,
                              blob, blobreenc, blob_size,
@@ -4039,10 +4041,10 @@ static CK_RV import_EC_key(STDLL_TokData_t *tokdata, SESSION *sess,
 import_EC_key_end:
     if (pubkey)
         free(pubkey);
-    if (data) {
+    /*if (data) {
         OPENSSL_cleanse(data, data_len);
         free(data);
-    }
+    }*/
     if (p_attrs != NULL)
         cleanse_and_free_attribute_array(p_attrs, attrs_len);
     if (new_p_attrs)
@@ -10072,10 +10074,11 @@ CK_RV ep11tok_sign_single(STDLL_TokData_t *tokdata, SESSION *session,
     RETRY_REENC_BLOB_START(tokdata, target_info, key_obj, keyblob, keyblobsize,
                            useblob, useblobsize, rc)
         if (ep11_pqc_obj_strength_supported(target_info, ep11_mech.mechanism,
-                                            key_obj))
+                                            key_obj)){
             rc = dll_m_SignSingle(useblob, useblobsize, &ep11_mech,
                                   in_data, in_data_len,
                                   signature, sig_len, target_info->target);
+            TRACE_ERROR("%s rc=0x%lx\n", __func__, rc);}
         else
             rc = CKR_KEY_SIZE_RANGE;
     RETRY_REENC_BLOB_END(tokdata, target_info, useblob, useblobsize, rc)
