@@ -36,7 +36,8 @@
 #define CURVE456        0x01C8
 #define CURVE512        0x0200
 #define CURVE521        0x0209
-#define CURVE768        0x0312
+#define CURVE768        0x0296
+#define CURVE776        0x0308
 #define CURVE1536       0x0600
 
 /* Supported Elliptic Curves */
@@ -65,7 +66,7 @@ extern const CK_BYTE curve25519[];
 extern const CK_BYTE curve448[];
 extern const CK_BYTE ed25519[];
 extern const CK_BYTE ed448[];
-extern const CK_BYTE bls[];
+extern const CK_BYTE bls12_381[];
 
 
 // structure of supported Elliptic Curves

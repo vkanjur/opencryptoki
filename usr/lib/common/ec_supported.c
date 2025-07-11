@@ -119,6 +119,6 @@ const struct _ec der_ec_supported[NUMEC] = {
             sizeof(ed25519), &ed25519},
     {EDWARDS_CURVE, CURVE456, CURVE448, NID_ED448, CK_FALSE,
             sizeof(ed448), &ed448},
-    {BLS12_381_CURVE, CURVE1536, CURVE384, CK_FALSE, CK_TRUE,
+    {BLS12_381_CURVE, CURVE384, CURVE384, CK_FALSE, CK_TRUE,
             sizeof(bls12_381), &bls12_381},
 };

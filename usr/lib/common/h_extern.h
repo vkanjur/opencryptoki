@@ -2885,6 +2885,12 @@ CK_RV ber_decode_BIT_STRING(CK_BYTE *str,
                             CK_BYTE **data,
                             CK_ULONG *data_len, CK_ULONG *field_len);
 
+CK_ULONG ber_encode_BIT_STRING(CK_BBOOL length_only,
+                            CK_BYTE **ber_str,
+                            CK_ULONG *ber_str_len, CK_BYTE *data,
+                            CK_ULONG data_len,
+                            CK_BYTE unused_bits);
+
 CK_RV ber_encode_OCTET_STRING(CK_BBOOL length_only,
                               CK_BYTE **str,
                               CK_ULONG *str_len,

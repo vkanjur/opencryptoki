@@ -1258,8 +1258,7 @@ CK_RV ec_uncompress_public_key(CK_BYTE *curve, CK_ULONG curve_len,
     if (type == -1)
         return CKR_CURVE_NOT_SUPPORTED;
 
-    if (type == MONTGOMERY_CURVE || type == EDWARDS_CURVE ||
-        type == BLS12_381_CURVE) {
+    if (type == MONTGOMERY_CURVE || type == EDWARDS_CURVE ) {
         /*
          * Public keys of Montgomery and Edwards curves are always compressed
          * and are not uncompressed.
@@ -1281,6 +1280,7 @@ CK_RV ec_uncompress_public_key(CK_BYTE *curve, CK_ULONG curve_len,
                pubkey[0] == POINT_CONVERSION_UNCOMPRESSED) {
         /* Uncompressed form */
         memcpy(out_pubkey, pubkey, pubkey_len);
+        TRACE_ERROR("Reached here \n");
         return CKR_OK;
     } else if (pubkey_len == 1 + 2 * privkey_len &&
             (pubkey[0] == POINT_CONVERSION_HYBRID ||
@@ -1292,6 +1292,7 @@ CK_RV ec_uncompress_public_key(CK_BYTE *curve, CK_ULONG curve_len,
     } else if (pubkey_len <= 2 * privkey_len) {
         /* Without format byte (and leading zeros), treat as uncompressed */
         pad_len = 2 * privkey_len - pubkey_len;
+        TRACE_ERROR("Reached here 2 \n");
         out_pubkey[0] = POINT_CONVERSION_UNCOMPRESSED;
         memset(out_pubkey + 1, 0, pad_len);
         memcpy(out_pubkey + 1 + pad_len, pubkey, pubkey_len);
